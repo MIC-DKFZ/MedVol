@@ -1,40 +1,49 @@
 import SimpleITK as sitk
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Union, List, Tuple
 import numpy as np
 
 
 @dataclass
 class MedVol:
     array: Union[np.ndarray, str]
-    spacing: Optional[np.ndarray] = None
-    origin: Optional[np.ndarray] = None
-    direction: Optional[np.ndarray] = None
+    spacing: Optional[Union[List, Tuple, np.ndarray]] = None
+    origin: Optional[Union[List, Tuple, np.ndarray]] = None
+    direction: Optional[Union[List, Tuple, np.ndarray]] = None
     header: Optional[Dict] = None
     copy: Optional['MedVol'] = field(default=None, repr=False)
 
     def __post_init__(self):
         # Validate array: Must be a 3D array
         if not ((isinstance(self.array, np.ndarray) and self.array.ndim == 3) or isinstance(self.array, str)):
-            raise ValueError("array must be a 3D numpy array or a filepath string")
+            raise ValueError("Array must be a 3D numpy array or a filepath string")
         
         if isinstance(self.array, str):
             self._load(self.array)
 
-        # Validate spacing: Must be None or a 1D array with three floats
+        # Validate spacing: Must be None or an array-like with shape (3,)
         if self.spacing is not None:
-            if not (isinstance(self.spacing, np.ndarray) and self.spacing.shape == (3,) and np.issubdtype(self.spacing.dtype, np.floating)):
-                raise ValueError("spacing must be None or a 1D numpy array with three floats")
+            if not isinstance(self.spacing, (List, Tuple, np.ndarray)):
+                raise ValueError("Spacing must be either None, List, Tuple or np.ndarray")
+            self.spacing = np.array(self.spacing).astype(float)
+            if not (self.spacing.shape == (3,) and np.issubdtype(self.spacing.dtype, np.floating)):
+                raise ValueError("The dtype of spacing must be three floats")
 
-        # Validate origin: Must be None or a 1D array with three floats
+        # Validate origin: Must be None or an array-like with shape (3,)
         if self.origin is not None:
-            if not (isinstance(self.origin, np.ndarray) and self.origin.shape == (3,) and np.issubdtype(self.origin.dtype, np.floating)):
-                raise ValueError("origin must be None or a 1D numpy array with three floats")
+            if not isinstance(self.origin, (List, Tuple, np.ndarray)):
+                raise ValueError("Origin must be either None, List, Tuple or np.ndarray")
+            self.origin = np.array(self.origin).astype(float)
+            if not (self.origin.shape == (3,) and np.issubdtype(self.origin.dtype, np.floating)):
+                raise ValueError("The dtype of origin must be three floats")
 
-        # Validate direction: Must be None or a 3x3 array of floats
+        # Validate direction: Must be None or an array-like with shape (3, 3)
         if self.direction is not None:
-            if not (isinstance(self.direction, np.ndarray) and self.direction.shape == (3, 3) and np.issubdtype(self.direction.dtype, np.floating)):
-                raise ValueError("direction must be None or a 3x3 numpy array of floats")
+            if not isinstance(self.direction, (List, Tuple, np.ndarray)):
+                raise ValueError("Direction must be either None, List, Tuple or np.ndarray")
+            self.direction = np.array(self.direction).astype(float)
+            if not (self.direction.shape == (3, 3) and np.issubdtype(self.direction.dtype, np.floating)):
+                raise ValueError("The dtype of direction must be three floats")
 
         # Validate header: Must be None or a dictionary
         if self.header is not None and not isinstance(self.header, dict):
