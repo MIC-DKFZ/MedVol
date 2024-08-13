@@ -83,9 +83,13 @@ class MedVol:
 
     def save(self, filepath):
         image_sitk = sitk.GetImageFromArray(self.array)
-        image_sitk.SetSpacing(self.spacing.tolist()[::-1])
-        image_sitk.SetOrigin(self.origin.tolist()[::-1])
-        image_sitk.SetDirection(self.direction.flatten().tolist()[::-1])
-        for key, value in self.header.items():
-            image_sitk.SetMetaData(key, value) 
+        if self.spacing is not None:
+            image_sitk.SetSpacing(self.spacing.tolist()[::-1])
+        if self.origin is not None:
+            image_sitk.SetOrigin(self.origin.tolist()[::-1])
+        if self.direction is not None:
+            image_sitk.SetDirection(self.direction.flatten().tolist()[::-1])
+        if self.header is not None:
+            for key, value in self.header.items():
+                image_sitk.SetMetaData(key, value) 
         sitk.WriteImage(image_sitk, filepath)
