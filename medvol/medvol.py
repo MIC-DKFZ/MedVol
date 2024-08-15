@@ -92,4 +92,4 @@ class MedVol:
         if self.header is not None:
             for key, value in self.header.items():
                 image_sitk.SetMetaData(key, value) 
-        sitk.WriteImage(image_sitk, filepath)
+        sitk.WriteImage(image_sitk, filepath, useCompression=True)
