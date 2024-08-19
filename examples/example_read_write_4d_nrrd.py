@@ -12,14 +12,6 @@ def example_read_write_4d(load_filepath, save_filepath):
     direction1 = image.direction
     affine1 = image.affine
 
-    # SimpleITK cannot store 4D metadata, only 2D and 3D metadata, but this image was created via MITK which can store 4D metadata
-    # Need to manually remove the additional 4D information
-    spacing1[3] = 1
-    origin1[3] = 0
-    direction1[3, 3] = 1
-    affine1[3, 3] = 1
-    affine1[3, 4] = 0
-
     # Write as new 4D image
     image.save(save_filepath)
 

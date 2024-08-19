@@ -125,32 +125,16 @@ class MedVol:
         array = sitk.GetArrayFromImage(image_sitk)
         ndims = len(array.shape)
         metadata_ndims = len(image_sitk.GetSpacing())
-        spacing = np.array(image_sitk.GetSpacing()[::-1])
-        origin = np.array(image_sitk.GetOrigin()[::-1])
-        direction = np.array(image_sitk.GetDirection()[::-1])
-        header = {key: image_sitk.GetMetaData(key) for key in image_sitk.GetMetaDataKeys()}  
 
-        if ndims == metadata_ndims:   
-            direction = direction.reshape(ndims, ndims)
-        elif ndims == 4 and metadata_ndims == 3: # Some 4D Nifti images might have 3D metadata as SimpleITK can only store 2D and 3D metadata
-            # Expand metadata from 3D to 4D
-            spacing_expanded = np.zeros((ndims,))
-            spacing_expanded[:ndims-1] = spacing
-            spacing_expanded[ndims-1] = 1
-            spacing = spacing_expanded
-
-            origin_expanded = np.zeros((ndims,))
-            origin_expanded[:ndims-1] = origin
-            origin_expanded[ndims-1] = 0
-            origin = origin_expanded
-
-            direction_expanded = np.zeros((ndims, ndims))
-            direction_expanded[:ndims-1, :ndims-1] = direction.reshape(ndims-1, ndims-1)
-            direction_expanded[ndims-1, ndims-1] = 1
-            direction = direction_expanded
-        else:
+        if ndims == 4 and np.argmin(array.shape) != 0:
+            raise RuntimeError("MedVol expect 4D images to be channel-first.")
+        if ndims != metadata_ndims: 
             raise RuntimeError("Cannot interpret image metadata. Something is wrong with the dimensionality.")
         
+        spacing = np.array(image_sitk.GetSpacing()[::-1])
+        origin = np.array(image_sitk.GetOrigin()[::-1])
+        direction = np.array(image_sitk.GetDirection()[::-1]).reshape(ndims, ndims)
+        header = {key: image_sitk.GetMetaData(key) for key in image_sitk.GetMetaDataKeys()}          
         is_seg = None
         if "intent_name" in header and header["intent_name"] == "medvol_seg":
             is_seg = True
@@ -160,16 +144,16 @@ class MedVol:
         return array, spacing, origin, direction, header, is_seg
 
     def save(self, filepath):
-        if filepath[-5:] == ".nrrd" and self.ndims == 4:
-            raise RuntimeError("Saving a 4D image as NRRD is currently not supported. Save the image as Nifti instead.")
+        if self.ndims == 4:
+            raise RuntimeError("Saving a 4D image is currently not supported.")
         image_sitk = sitk.GetImageFromArray(self.array)
         # SimpleITK cannot store 4D metadata, only 2D and 3D metadata
         if self.spacing is not None:
-            image_sitk.SetSpacing(self.spacing[:3].tolist()[::-1])
+            image_sitk.SetSpacing(self.spacing.tolist()[::-1])
         if self.origin is not None:
-            image_sitk.SetOrigin(self.origin[:3].tolist()[::-1])
+            image_sitk.SetOrigin(self.origin.tolist()[::-1])
         if self.direction is not None:
-            image_sitk.SetDirection(self.direction[:3, :3].flatten().tolist()[::-1])
+            image_sitk.SetDirection(self.direction.flatten().tolist()[::-1])
         if self.is_seg is not None:
             if self.is_seg:
                 self.header["intent_name"] = "medvol_seg"
