@@ -1,10 +1,18 @@
 import SimpleITK as sitk
-from dataclasses import dataclass, field
 from typing import Dict, Optional, Union, List, Tuple
 import numpy as np
 
-
+# TODO:
 # - Enable user to set affine
+#   - Reflect changes in affine in all other parameters
+# - Add affine_3d function?
+# - Create docstrings and docs
+# - Write tests
+# - Rename into MedImg
+# - Fix is_seg
+# - Fix napari-nifti loading of 2D and 4D images
+
+
 class MedVol:
     def __init__(self,
                  array: Union[np.ndarray, str],
