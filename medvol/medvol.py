@@ -160,6 +160,8 @@ class MedVol:
         return array, spacing, origin, direction, header, is_seg
 
     def save(self, filepath):
+        if filepath[-5:] == ".nrrd" and self.ndims == 4:
+            raise RuntimeError("Saving a 4D image as NRRD is currently not supported. Save the image as Nifti instead.")
         image_sitk = sitk.GetImageFromArray(self.array)
         # SimpleITK cannot store 4D metadata, only 2D and 3D metadata
         if self.spacing is not None:
