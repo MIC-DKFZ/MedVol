@@ -18,7 +18,7 @@ def example_read_write_4d(load_filepath, save_filepath):
     origin1[3] = 0
     direction1[3, 3] = 1
     affine1[3, 3] = 1
-    affine1[3, 4] = 1
+    affine1[3, 4] = 0
 
     # Write as new 4D image
     image.save(save_filepath)
