@@ -80,7 +80,7 @@ class MedVol:
                 self.header = header
                 self._has_header = True
         else:
-            self.header = None
+            self.header = {}
             self._has_header = False
         
         # Validate is_seg: Must be None or a boolean
