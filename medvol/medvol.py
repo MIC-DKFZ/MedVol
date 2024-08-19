@@ -1,6 +1,7 @@
 import SimpleITK as sitk
 from typing import Dict, Optional, Union, List, Tuple
 import numpy as np
+from pathlib import Path
 
 # TODO:
 # - Enable user to set affine
@@ -23,7 +24,7 @@ class MedVol:
                  is_seg: Optional[bool] = None,
                  copy: Optional['MedVol'] = None) -> None:        
         # Validate array: Must be a 2D, 3D or 4D array
-        if not ((isinstance(array, np.ndarray) and (array.ndim == 2 or array.ndim == 3 or array.ndim == 4)) or isinstance(array, str)):
+        if not ((isinstance(array, np.ndarray) and (array.ndim == 2 or array.ndim == 3 or array.ndim == 4)) or isinstance(array, (str, Path))):
             raise ValueError("Array must be a 2D, 3D or 4D numpy array or a filepath string.")
         elif isinstance(array, str) and (spacing is not None or origin is not None or direction is not None or header is not None or is_seg is not None or copy is not None):
             raise RuntimeError("Spacing, origin, direction, header, is_seg or copy cannot be set if array is a string to load an image.")
@@ -129,7 +130,7 @@ class MedVol:
             self.is_seg = other.is_seg
 
     def _load(self, filepath):
-        image_sitk = sitk.ReadImage(filepath)
+        image_sitk = sitk.ReadImage(str(filepath))
         array = sitk.GetArrayFromImage(image_sitk)
         ndims = len(array.shape)
         metadata_ndims = len(image_sitk.GetSpacing())
@@ -170,4 +171,4 @@ class MedVol:
         if self.header is not None:
             for key, value in self.header.items():
                 image_sitk.SetMetaData(key, value)
-        sitk.WriteImage(image_sitk, filepath, useCompression=True)
+        sitk.WriteImage(image_sitk, str(filepath), useCompression=True)
