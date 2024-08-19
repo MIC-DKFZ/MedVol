@@ -165,7 +165,7 @@ class MedVol:
         if self.is_seg is not None:
             if self.is_seg:
                 self.header["intent_name"] = "medvol_seg"
-            else:
+            elif not self.is_seg or self.is_seg is None:
                 self.header["intent_name"] = "medvol_img"
         if self.header is not None:
             for key, value in self.header.items():
