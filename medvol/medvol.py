@@ -6,12 +6,10 @@ from pathlib import Path
 # TODO:
 # - Enable user to set affine
 #   - Reflect changes in affine in all other parameters
-# - Add affine_3d function?
-# - Create docstrings and docs
+# - Create docs
 # - Write tests
 # - Rename into MedImg
 # - Fix is_seg
-# - Fix napari-nifti loading of 2D and 4D images
 
 
 class MedVol:
@@ -122,13 +120,7 @@ class MedVol:
 
         Returns:
             np.ndarray: The affine matrix representing the translation, scaling, and rotation of the image.
-
-        Raises:
-            ValueError: If spacing, origin, or direction are not set.
-        """
-        if self.spacing is None or self.origin is None or self.direction is None:
-            raise ValueError("Spacing, origin, and direction must all be set to compute the affine.")
-        
+        """        
         affine = np.eye(self.ndims+1)
         affine[:self.ndims, :self.ndims] = self.direction @ np.diag(self.spacing)
         affine[:self.ndims, self.ndims] = self.origin
@@ -186,9 +178,6 @@ class MedVol:
 
         Returns:
             int: The number of dimensions of the image (2D, 3D, or 4D).
-
-        Raises:
-            ValueError: If the array is not set.
         """        
         return len(self.array.shape)
 

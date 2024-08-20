@@ -6,6 +6,23 @@
 
 A wrapper for loading medical 3D image volumes such as NIFTI or NRRD images.
 
+Features:
+- Supports loading and saving of 2D, 3D and 4D Nifti and NRRD images
+    - (Saving 4D images is currently not supported due to a SimpleITK bug)
+- Simple access to image array
+- Simple access to image metadata
+    - Affine
+    - Spacing
+    - Origin
+    - Direction
+    - Translation
+    - Rotation
+    - Scale (Same as spacing)
+    - Shear
+    - Header (The raw header)
+- Copying/Modification of all or selected metadata across MedVol images
+
+
 ## Installation
 
 You can install `medvol` via [pip](https://pypi.org/project/medvol/):
@@ -23,6 +40,7 @@ image = MedVol("path/to/image.nifti")
 # Print some metadata
 print("Spacing: ", image.spacing)
 print("Affine: ", image.affine)
+print("Rotation: ", image.rotation)
 print("Header: ", image.header)
 
 # Access and modify the image array
