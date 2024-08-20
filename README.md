@@ -4,7 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/medvol.svg?color=green)](https://pypi.org/project/medvol)
 [![Python Version](https://img.shields.io/pypi/pyversions/medvol.svg?color=green)](https://python.org)
 
-A wrapper for loading medical 3D image volumes such as NIFTI or NRRD images.
+A wrapper for loading medical 2D, 3D and 4D NIFTI or NRRD images.
 
 Features:
 - Supports loading and saving of 2D, 3D and 4D Nifti and NRRD images
