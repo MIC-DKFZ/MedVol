@@ -22,7 +22,23 @@ class MedVol:
                  direction: Optional[Union[List, Tuple, np.ndarray]] = None,
                  header: Optional[Dict] = None,
                  is_seg: Optional[bool] = None,
-                 copy: Optional['MedVol'] = None) -> None:        
+                 copy: Optional['MedVol'] = None) -> None:
+        """
+        Initializes the MedVol object with image data and associated metadata.
+
+        Args:
+            array (Union[np.ndarray, str]): A 2D, 3D, or 4D numpy array or a file path string to load an image.
+            spacing (Optional[Union[List, Tuple, np.ndarray]]): Voxel spacing in each dimension. Defaults to None.
+            origin (Optional[Union[List, Tuple, np.ndarray]]): Origin coordinates in physical space. Defaults to None.
+            direction (Optional[Union[List, Tuple, np.ndarray]]): Direction cosines for the image axes. Defaults to None.
+            header (Optional[Dict]): Metadata associated with the image. Defaults to None.
+            is_seg (Optional[bool]): Indicates if the image is a segmentation. Defaults to None.
+            copy (Optional['MedVol']): Another MedVol instance to copy fields from. Defaults to None.
+
+        Raises:
+            ValueError: If array is not a valid numpy array or string.
+            RuntimeError: If incompatible arguments are provided.
+        """ 
         # Validate array: Must be a 2D, 3D or 4D array
         if not ((isinstance(array, np.ndarray) and (array.ndim == 2 or array.ndim == 3 or array.ndim == 4)) or isinstance(array, (str, Path))):
             raise ValueError("Array must be a 2D, 3D or 4D numpy array or a filepath string.")
@@ -101,6 +117,15 @@ class MedVol:
 
     @property
     def affine(self) -> np.ndarray:
+        """
+        Computes the affine transformation matrix for the image.
+
+        Returns:
+            np.ndarray: The affine matrix representing the translation, scaling, and rotation of the image.
+
+        Raises:
+            ValueError: If spacing, origin, or direction are not set.
+        """
         if self.spacing is None or self.origin is None or self.direction is None:
             raise ValueError("Spacing, origin, and direction must all be set to compute the affine.")
         
@@ -111,20 +136,44 @@ class MedVol:
     
     @property
     def translation(self):
+        """
+        Extracts the translation vector from the affine matrix.
+
+        Returns:
+            np.ndarray: The translation vector from the affine matrix.
+        """
         return self.affine[:-1, -1]
 
     @property
     def scale(self):
+        """
+        Extracts the scaling factors from the affine matrix.
+
+        Returns:
+            np.ndarray: The scaling factors for each axis from the affine matrix.
+        """
         scales = np.linalg.norm(self.affine[:-1, :-1], axis=0)
         return scales
 
     @property
     def rotation(self):
+        """
+        Extracts the rotation matrix from the affine matrix.
+
+        Returns:
+            np.ndarray: The rotation matrix from the affine matrix.
+        """
         rotation_matrix = self.affine[:-1, :-1] / self.scale
         return rotation_matrix
 
     @property
     def shear(self):
+        """
+        Computes the shear matrix from the affine matrix.
+
+        Returns:
+            np.ndarray: The shear matrix, representing axis-alignment adjustments.
+        """
         scales = self.scale
         rotation_matrix = self.rotation
         shearing_matrix = np.dot(rotation_matrix.T, self.affine[:-1, :-1]) / scales[:, None]
@@ -132,6 +181,15 @@ class MedVol:
     
     @property
     def ndims(self) -> int:
+        """
+        Returns the number of dimensions of the image.
+
+        Returns:
+            int: The number of dimensions of the image (2D, 3D, or 4D).
+
+        Raises:
+            ValueError: If the array is not set.
+        """
         if self.array is None:
             raise ValueError("Array be set to compute the number of dimensions.")
         
@@ -139,6 +197,12 @@ class MedVol:
         return ndims
 
     def _copy_fields_from(self, other: 'MedVol'):
+        """
+        Copies fields from another MedVol instance if they are not already set.
+
+        Args:
+            other (MedVol): The MedVol instance to copy fields from.
+        """
         if not self._has_spacing:
             self.spacing = other.spacing
         if not self._has_origin:
@@ -151,6 +215,19 @@ class MedVol:
             self.is_seg = other.is_seg
 
     def _load(self, filepath):
+        """
+        Loads image data and metadata from a file.
+
+        Args:
+            filepath (str or Path): The path to the file to load.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, Dict, Optional[bool]]:
+            The image array, spacing, origin, direction, header, and is_seg values.
+
+        Raises:
+            RuntimeError: If the dimensionality of the image and metadata do not match.
+        """
         image_sitk = sitk.ReadImage(str(filepath))
         array = sitk.GetArrayFromImage(image_sitk)
         ndims = len(array.shape)
@@ -174,10 +251,18 @@ class MedVol:
         return array, spacing, origin, direction, header, is_seg
 
     def save(self, filepath):
+        """
+        Saves the current image and its metadata to a file.
+
+        Args:
+            filepath (str or Path): The path where the file will be saved.
+
+        Raises:
+            RuntimeError: If saving a 4D image is attempted.
+        """
         if self.ndims == 4:
             raise RuntimeError("Saving a 4D image is currently not supported.")
         image_sitk = sitk.GetImageFromArray(self.array)
-        # SimpleITK cannot store 4D metadata, only 2D and 3D metadata
         if self.spacing is not None:
             image_sitk.SetSpacing(self.spacing.tolist()[::-1])
         if self.origin is not None:
