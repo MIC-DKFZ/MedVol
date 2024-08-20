@@ -189,12 +189,8 @@ class MedVol:
 
         Raises:
             ValueError: If the array is not set.
-        """
-        if self.array is None:
-            raise ValueError("Array be set to compute the number of dimensions.")
-        
-        ndims = len(self.array.shape)
-        return ndims
+        """        
+        return len(self.array.shape)
 
     def _copy_fields_from(self, other: 'MedVol'):
         """
