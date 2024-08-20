@@ -6,10 +6,8 @@ from pathlib import Path
 # TODO:
 # - Enable user to set affine
 #   - Reflect changes in affine in all other parameters
-# - Create docs
 # - Write tests
 # - Rename into MedImg
-# - Fix is_seg
 
 
 class MedVol:
@@ -228,9 +226,9 @@ class MedVol:
         direction = np.array(image_sitk.GetDirection()[::-1]).reshape(ndims, ndims)
         header = {key: image_sitk.GetMetaData(key) for key in image_sitk.GetMetaDataKeys()}          
         is_seg = None
-        if "intent_name" in header and header["intent_name"] == "medvol_seg":
+        if "ITK_FileNotes" in header and header["ITK_FileNotes"] == "medvol_seg":
             is_seg = True
-        elif "intent_name" in header and header["intent_name"] == "medvol_img":
+        elif "ITK_FileNotes" in header and header["ITK_FileNotes"] == "medvol_img":
             is_seg = False
         
         return array, spacing, origin, direction, header, is_seg
@@ -256,9 +254,9 @@ class MedVol:
             image_sitk.SetDirection(self.direction.flatten().tolist()[::-1])
         if self.is_seg is not None:
             if self.is_seg:
-                self.header["intent_name"] = "medvol_seg"
+                self.header["ITK_FileNotes"] = "medvol_seg"
             elif not self.is_seg or self.is_seg is None:
-                self.header["intent_name"] = "medvol_img"
+                self.header["ITK_FileNotes"] = "medvol_img"
         if self.header is not None:
             for key, value in self.header.items():
                 image_sitk.SetMetaData(key, value)
