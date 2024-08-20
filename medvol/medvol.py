@@ -110,6 +110,27 @@ class MedVol:
         return affine
     
     @property
+    def translation(self):
+        return self.affine[:-1, -1]
+
+    @property
+    def scale(self):
+        scales = np.linalg.norm(self.affine[:-1, :-1], axis=0)
+        return scales
+
+    @property
+    def rotation(self):
+        rotation_matrix = self.affine[:-1, :-1] / self.scale
+        return rotation_matrix
+
+    @property
+    def shear(self):
+        scales = self.scale
+        rotation_matrix = self.rotation
+        shearing_matrix = np.dot(rotation_matrix.T, self.affine[:-1, :-1]) / scales[:, None]
+        return shearing_matrix
+    
+    @property
     def ndims(self) -> int:
         if self.array is None:
             raise ValueError("Array be set to compute the number of dimensions.")
