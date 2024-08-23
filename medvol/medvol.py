@@ -104,7 +104,7 @@ class MedVol:
                 self.is_seg = is_seg
                 self._has_is_seg = True
         else:
-            self.is_seg = False
+            self.is_seg = None
             self._has_is_seg = False
         
         # If copy is set, copy fields from the other Nifti instance
@@ -255,7 +255,7 @@ class MedVol:
         if self.is_seg is not None:
             if self.is_seg:
                 self.header["ITK_FileNotes"] = "medvol_seg"
-            elif not self.is_seg or self.is_seg is None:
+            elif not self.is_seg:
                 self.header["ITK_FileNotes"] = "medvol_img"
         if self.header is not None:
             for key, value in self.header.items():
