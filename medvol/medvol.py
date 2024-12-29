@@ -12,7 +12,7 @@ from pathlib import Path
 
 class MedVol:
     def __init__(self,
-                 array: Union[np.ndarray, str],
+                 array: Union[np.ndarray, str, Path],
                  spacing: Optional[Union[List, Tuple, np.ndarray]] = None,
                  origin: Optional[Union[List, Tuple, np.ndarray]] = None,
                  direction: Optional[Union[List, Tuple, np.ndarray]] = None,
@@ -41,7 +41,7 @@ class MedVol:
         elif isinstance(array, str) and (spacing is not None or origin is not None or direction is not None or header is not None or is_seg is not None or copy is not None):
             raise RuntimeError("Spacing, origin, direction, header, is_seg or copy cannot be set if array is a string to load an image.")
         
-        if isinstance(array, str):
+        if isinstance(array, str) or isinstance(array, Path):
             array, spacing, origin, direction, header, is_seg = self._load(array)
 
         self.array = array
