@@ -2,12 +2,28 @@ import SimpleITK as sitk
 from typing import Dict, Optional, Union, List, Tuple
 import numpy as np
 from pathlib import Path
+import locale
+from contextlib import contextmanager
 
 # TODO:
 # - Enable user to set affine
 #   - Reflect changes in affine in all other parameters
 # - Write tests
 # - Rename into MedImg
+
+
+@contextmanager
+def temporary_c_locale():
+    # Save current LC_NUMERIC
+    old_locale = locale.setlocale(locale.LC_NUMERIC, None)
+    
+    try:
+        # Switch to safe C locale
+        locale.setlocale(locale.LC_NUMERIC, "C")
+        yield
+    finally:
+        # Restore original locale
+        locale.setlocale(locale.LC_NUMERIC, old_locale)
 
 
 class MedVol:
@@ -211,7 +227,8 @@ class MedVol:
         Raises:
             RuntimeError: If the dimensionality of the image and metadata do not match.
         """
-        image_sitk = sitk.ReadImage(str(filepath))
+        with temporary_c_locale():
+            image_sitk = sitk.ReadImage(str(filepath))
         array = sitk.GetArrayFromImage(image_sitk)
         ndims = len(array.shape)
         metadata_ndims = len(image_sitk.GetSpacing())
