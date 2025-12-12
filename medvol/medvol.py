@@ -260,21 +260,22 @@ class MedVol:
         Raises:
             RuntimeError: If saving a 4D image is attempted.
         """
-        if self.ndims == 4:
-            raise RuntimeError("Saving a 4D image is currently not supported.")
-        image_sitk = sitk.GetImageFromArray(self.array)
-        if self.spacing is not None:
-            image_sitk.SetSpacing(self.spacing.tolist()[::-1])
-        if self.origin is not None:
-            image_sitk.SetOrigin(self.origin.tolist()[::-1])
-        if self.direction is not None:
-            image_sitk.SetDirection(self.direction.flatten().tolist()[::-1])
-        if self.is_seg is not None:
-            if self.is_seg:
-                self.header["ITK_FileNotes"] = "medvol_seg"
-            elif not self.is_seg:
-                self.header["ITK_FileNotes"] = "medvol_img"
-        if self.header is not None:
-            for key, value in self.header.items():
-                image_sitk.SetMetaData(key, value)
-        sitk.WriteImage(image_sitk, str(filepath), useCompression=True)
+        with temporary_c_locale():
+            if self.ndims == 4:
+                raise RuntimeError("Saving a 4D image is currently not supported.")
+            image_sitk = sitk.GetImageFromArray(self.array)
+            if self.spacing is not None:
+                image_sitk.SetSpacing(self.spacing.tolist()[::-1])
+            if self.origin is not None:
+                image_sitk.SetOrigin(self.origin.tolist()[::-1])
+            if self.direction is not None:
+                image_sitk.SetDirection(self.direction.flatten().tolist()[::-1])
+            if self.is_seg is not None:
+                if self.is_seg:
+                    self.header["ITK_FileNotes"] = "medvol_seg"
+                elif not self.is_seg:
+                    self.header["ITK_FileNotes"] = "medvol_img"
+            if self.header is not None:
+                for key, value in self.header.items():
+                    image_sitk.SetMetaData(key, value)
+            sitk.WriteImage(image_sitk, str(filepath), useCompression=True)
