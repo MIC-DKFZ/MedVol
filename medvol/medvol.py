@@ -26,6 +26,27 @@ def temporary_c_locale():
         locale.setlocale(locale.LC_NUMERIC, old_locale)
 
 
+def geometry_for_sitk_array(img: sitk.Image):
+    """
+    Return (direction, spacing, origin) re-indexed to match the NumPy array
+    returned by sitk.GetArrayFromImage(img).
+
+    Works for arbitrary spatial dimension.
+    """
+    dim = img.GetDimension()
+    P = np.arange(dim)[::-1]
+
+    direction = (
+        np.asarray(img.GetDirection(), dtype=float)
+        .reshape(dim, dim)[np.ix_(P, P)]
+    )
+
+    spacing = np.asarray(img.GetSpacing(), dtype=float)[P]
+    origin  = np.asarray(img.GetOrigin(),  dtype=float)[P]
+
+    return spacing, origin, direction
+
+
 class MedVol:
     def __init__(self,
                  array: Union[np.ndarray, str, Path],
@@ -238,9 +259,7 @@ class MedVol:
         if ndims != metadata_ndims: 
             raise RuntimeError("Cannot interpret image metadata. Something is wrong with the dimensionality.")
         
-        spacing = np.array(image_sitk.GetSpacing()[::-1])
-        origin = np.array(image_sitk.GetOrigin()[::-1])
-        direction = np.array(image_sitk.GetDirection()[::-1]).reshape(ndims, ndims)
+        spacing, origin, direction = geometry_for_sitk_array(image_sitk)
         header = {key: image_sitk.GetMetaData(key) for key in image_sitk.GetMetaDataKeys()}          
         is_seg = None
         if "ITK_FileNotes" in header and header["ITK_FileNotes"] == "medvol_seg":
