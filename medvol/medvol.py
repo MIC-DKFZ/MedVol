@@ -38,11 +38,11 @@ def geometry_for_sitk_array(img: sitk.Image):
 
     direction = (
         np.asarray(img.GetDirection(), dtype=float)
-        .reshape(dim, dim)[np.ix_(P, P)]
+        .reshape(dim, dim)[:, P]
     )
 
     spacing = np.asarray(img.GetSpacing(), dtype=float)[P]
-    origin  = np.asarray(img.GetOrigin(),  dtype=float)[P]
+    origin  = np.asarray(img.GetOrigin(),  dtype=float)
 
     return spacing, origin, direction
 
@@ -286,9 +286,9 @@ class MedVol:
             if self.spacing is not None:
                 image_sitk.SetSpacing(self.spacing.tolist()[::-1])
             if self.origin is not None:
-                image_sitk.SetOrigin(self.origin.tolist()[::-1])
+                image_sitk.SetOrigin(self.origin.tolist())
             if self.direction is not None:
-                image_sitk.SetDirection(self.direction.flatten().tolist()[::-1])
+                image_sitk.SetDirection(self.direction[:, ::-1].flatten().tolist())
             if self.is_seg is not None:
                 if self.is_seg:
                     self.header["ITK_FileNotes"] = "medvol_seg"
