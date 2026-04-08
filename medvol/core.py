@@ -9,8 +9,11 @@ from medvol.geometry import (
     SNAP_ATOL,
     affine_to_rotation,
     affine_to_shear,
+    canonical_coordinate_context,
+    canonicalize_array_and_affine,
     compose_affine,
     coordinate_system_from_affine,
+    deoblique_affine,
     decompose_affine,
     normalize_backend_name,
     validate_affine,
@@ -29,10 +32,17 @@ class MedVol:
         direction: Sequence[Sequence[float]] | None = None,
         header: Any = None,
         backend: str | None = None,
+        canonicalize: bool = True,
+        remove_obliqueness: bool = False,
     ) -> None:
+        if remove_obliqueness and not canonicalize:
+            raise ValueError("remove_obliqueness requires canonicalize=True.")
+
         self._coordinate_context = None
         self._header = None
         self._backend = normalize_backend_name(backend)
+        self._canonicalize = canonicalize
+        self._remove_obliqueness = remove_obliqueness
 
         if isinstance(source, (str, Path)):
             if any(value is not None for value in (affine, spacing, origin, direction)):
@@ -45,6 +55,7 @@ class MedVol:
             self._affine = validate_affine(result.affine, self.ndims)
             self._header = result.header
             self._coordinate_context = result.coordinate_context
+            self._apply_orientation_policy()
             self._backend = result.backend
             return
 
@@ -65,6 +76,19 @@ class MedVol:
                 atol=SNAP_ATOL,
             )
         self._header = header
+        self._coordinate_context = canonical_coordinate_context(self.ndims)
+        self._apply_orientation_policy()
+
+    def _apply_orientation_policy(self) -> None:
+        if self._canonicalize:
+            self._array, self._affine, self._coordinate_context = canonicalize_array_and_affine(
+                self._array,
+                self._affine,
+                self._coordinate_context,
+                atol=SNAP_ATOL,
+            )
+        if self._remove_obliqueness:
+            self._affine = deoblique_affine(self._affine, atol=SNAP_ATOL)
 
     @staticmethod
     def _validate_array(array: np.ndarray) -> np.ndarray:

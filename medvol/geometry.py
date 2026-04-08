@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Iterable, Sequence
 
 import numpy as np
+from nibabel.orientations import axcodes2ornt, io_orientation, ornt_transform
 
 
 SNAP_ATOL = 1e-6
@@ -14,6 +15,19 @@ class CoordinateContext:
     axis_labels: tuple[tuple[str, str], ...]
     anatomical_ndim: int
     anatomical_axes: tuple[int, ...] | None = None
+
+
+CANONICAL_AXIS_LABELS = (
+    ("L", "R"),
+    ("P", "A"),
+    ("I", "S"),
+)
+
+SIMPLEITK_AXIS_LABELS = (
+    ("R", "L"),
+    ("A", "P"),
+    ("I", "S"),
+)
 
 
 def as_float_array(values: Sequence[float], shape: tuple[int, ...], name: str) -> np.ndarray:
@@ -146,6 +160,195 @@ def coordinate_system_from_affine(
         orientation[column] = positive_label if sign > 0 else negative_label
 
     return "".join(orientation) + "+"
+
+
+def canonical_coordinate_context(
+    ndim: int,
+    anatomical_ndim: int | None = None,
+    anatomical_axes: tuple[int, ...] | None = None,
+) -> CoordinateContext:
+    spatial_ndim = min(ndim, 3) if anatomical_ndim is None else anatomical_ndim
+    if anatomical_axes is None:
+        anatomical_axes = tuple(range(spatial_ndim))
+    return CoordinateContext(
+        axis_labels=CANONICAL_AXIS_LABELS[:spatial_ndim],
+        anatomical_ndim=spatial_ndim,
+        anatomical_axes=anatomical_axes,
+    )
+
+
+def convert_affine_world_basis(
+    affine: np.ndarray,
+    source_context: CoordinateContext | None,
+    target_axis_labels: Sequence[tuple[str, str]],
+    *,
+    atol: float = SNAP_ATOL,
+) -> np.ndarray:
+    if source_context is None or source_context.anatomical_ndim <= 0:
+        return np.asarray(affine, dtype=float)
+
+    affine_array = np.asarray(affine, dtype=float)
+    converted = affine_array.copy()
+    for axis in range(source_context.anatomical_ndim):
+        source_labels = tuple(source_context.axis_labels[axis])
+        target_labels = tuple(target_axis_labels[axis])
+        if source_labels == target_labels:
+            sign = 1.0
+        elif source_labels == target_labels[::-1]:
+            sign = -1.0
+        else:
+            raise ValueError(
+                "Cannot convert affine between incompatible coordinate contexts."
+            )
+        converted[axis, :] *= sign
+
+    return snap_values(converted, atol=atol)
+
+
+def convert_affine_to_ras(
+    affine: np.ndarray,
+    context: CoordinateContext | None,
+    *,
+    ndim: int,
+    atol: float = SNAP_ATOL,
+) -> tuple[np.ndarray, CoordinateContext | None]:
+    if context is None or context.anatomical_ndim <= 0:
+        return np.asarray(affine, dtype=float), context
+
+    ras_affine = convert_affine_world_basis(
+        affine,
+        context,
+        CANONICAL_AXIS_LABELS[: context.anatomical_ndim],
+        atol=atol,
+    )
+    return (
+        ras_affine,
+        canonical_coordinate_context(
+            ndim,
+            anatomical_ndim=context.anatomical_ndim,
+            anatomical_axes=context.anatomical_axes,
+        ),
+    )
+
+
+def _full_index_transform(
+    old_shape: tuple[int, ...],
+    anatomical_axes: tuple[int, ...],
+    orientation_transform: np.ndarray,
+) -> tuple[list[int], np.ndarray]:
+    ndim = len(old_shape)
+    extras = [axis for axis in range(ndim) if axis not in anatomical_axes]
+    ordered_axes = [
+        anatomical_axes[int(source_axis)]
+        for source_axis in orientation_transform[:, 0].astype(int)
+    ] + extras
+
+    transform = np.zeros((ndim + 1, ndim + 1), dtype=float)
+    transform[-1, -1] = 1.0
+    for new_axis, old_axis in enumerate(ordered_axes):
+        if new_axis < len(anatomical_axes):
+            flip = int(orientation_transform[new_axis, 1])
+            if flip == -1:
+                transform[old_axis, new_axis] = -1.0
+                transform[old_axis, -1] = old_shape[old_axis] - 1
+            else:
+                transform[old_axis, new_axis] = 1.0
+        else:
+            transform[old_axis, new_axis] = 1.0
+
+    return ordered_axes, transform
+
+
+def canonicalize_array_and_affine(
+    array: np.ndarray,
+    affine: np.ndarray,
+    context: CoordinateContext | None,
+    *,
+    atol: float = SNAP_ATOL,
+) -> tuple[np.ndarray, np.ndarray, CoordinateContext | None]:
+    ndim = array.ndim
+    if context is None or context.anatomical_ndim <= 0:
+        return array, np.asarray(affine, dtype=float), context
+
+    ras_affine, ras_context = convert_affine_to_ras(
+        affine, context, ndim=ndim, atol=atol
+    )
+    assert ras_context is not None
+
+    anatomical_axes = (
+        tuple(range(ras_context.anatomical_ndim))
+        if ras_context.anatomical_axes is None
+        else ras_context.anatomical_axes
+    )
+    sub_affine = np.eye(ras_context.anatomical_ndim + 1, dtype=float)
+    sub_affine[: ras_context.anatomical_ndim, : ras_context.anatomical_ndim] = (
+        ras_affine[: ras_context.anatomical_ndim, anatomical_axes]
+    )
+    sub_affine[: ras_context.anatomical_ndim, -1] = ras_affine[
+        : ras_context.anatomical_ndim, -1
+    ]
+
+    current_orientation = io_orientation(sub_affine, tol=atol)
+    target_orientation = axcodes2ornt(tuple("RAS"[: ras_context.anatomical_ndim]))
+    orientation_transform = ornt_transform(current_orientation, target_orientation)
+
+    ordered_axes, index_transform = _full_index_transform(
+        array.shape,
+        anatomical_axes,
+        orientation_transform,
+    )
+
+    canonical_array = np.transpose(array, axes=ordered_axes)
+    for new_axis, flip in enumerate(orientation_transform[:, 1].astype(int)):
+        if flip == -1:
+            canonical_array = np.flip(canonical_array, axis=new_axis)
+
+    canonical_affine = snap_values(ras_affine @ index_transform, atol=atol)
+    canonical_affine = validate_affine(canonical_affine, ndim, atol=atol)
+    canonical_context = canonical_coordinate_context(
+        ndim,
+        anatomical_ndim=ras_context.anatomical_ndim,
+        anatomical_axes=tuple(range(ras_context.anatomical_ndim)),
+    )
+    return canonical_array, canonical_affine, canonical_context
+
+
+def deoblique_affine(
+    affine: np.ndarray,
+    *,
+    atol: float = SNAP_ATOL,
+) -> np.ndarray:
+    affine_array = np.asarray(affine, dtype=float)
+    ndim = affine_array.shape[0] - 1
+    linear = affine_array[:-1, :-1]
+    scales = np.linalg.norm(linear, axis=0)
+    if np.any(scales <= atol):
+        raise ValueError("Cannot deoblique an affine with zero-length axes.")
+
+    deobliqued = np.eye(ndim + 1, dtype=float)
+    deobliqued[:-1, :-1] = np.diag(scales)
+    deobliqued[:-1, -1] = affine_array[:-1, -1]
+    return validate_affine(snap_values(deobliqued, atol=atol), ndim, atol=atol)
+
+
+def context_to_space_name(
+    context: CoordinateContext | None,
+    ndim: int,
+) -> str | None:
+    if context is None or context.anatomical_ndim < 3:
+        return None
+
+    axis_labels = tuple(context.axis_labels[:3])
+    if axis_labels == CANONICAL_AXIS_LABELS:
+        base = "right-anterior-superior"
+    elif axis_labels == SIMPLEITK_AXIS_LABELS:
+        base = "left-posterior-superior"
+    else:
+        return None
+
+    if ndim == 4:
+        return base + "-time"
+    return base
 
 
 def direction_and_spacing_to_linear(

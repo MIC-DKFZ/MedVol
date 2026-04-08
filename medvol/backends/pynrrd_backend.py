@@ -7,7 +7,7 @@ import nrrd
 import numpy as np
 
 from medvol.backends.base import BackendLoadResult
-from medvol.geometry import CoordinateContext, validate_affine
+from medvol.geometry import CoordinateContext, context_to_space_name, validate_affine
 
 
 NRRD_SPACE_LABELS = {
@@ -41,6 +41,7 @@ class PynrrdBackend:
         directions = header.get("space directions")
         if directions is not None:
             space_dim = None
+            spatial_axes: list[int] = []
             for direction in directions:
                 if direction is None or (
                     isinstance(direction, str) and direction.lower() == "none"
@@ -73,10 +74,12 @@ class PynrrdBackend:
                     non_spatial_row += 1
                     continue
                 affine[: vector.shape[0], axis] = vector
+                spatial_axes.append(axis)
         else:
             spacings = header.get("spacings")
             if spacings is None:
                 spacings = np.ones((ndim,), dtype=float)
+            spatial_axes = list(range(min(3, ndim)))
             for axis in range(ndim):
                 affine[axis, axis] = float(spacings[axis])
 
@@ -89,10 +92,11 @@ class PynrrdBackend:
         axis_labels = NRRD_SPACE_LABELS.get(space_name)
         coordinate_context = None
         if axis_labels is not None:
+            anatomical_axes = tuple(spatial_axes[: min(3, len(spatial_axes))])
             coordinate_context = CoordinateContext(
                 axis_labels=axis_labels,
-                anatomical_ndim=min(3, ndim),
-                anatomical_axes=tuple(range(min(3, ndim))),
+                anatomical_ndim=len(anatomical_axes),
+                anatomical_axes=anatomical_axes,
             )
 
         return BackendLoadResult(
@@ -122,4 +126,9 @@ class PynrrdBackend:
         header["space origin"] = affine[:-1, -1].copy()
         header["dimension"] = ndim
         header["sizes"] = medvol.array.shape
+        space_name = context_to_space_name(medvol._coordinate_context, ndim)
+        if space_name is not None:
+            header["space"] = space_name
+        else:
+            header.pop("space", None)
         nrrd.write(str(filepath), medvol.array, header=header)

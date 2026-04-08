@@ -9,7 +9,17 @@ import SimpleITK as sitk
 import numpy as np
 
 from medvol.backends.base import BackendLoadResult
-from medvol.geometry import CoordinateContext, SNAP_ATOL, compose_affine, decompose_affine
+from medvol.geometry import (
+    CANONICAL_AXIS_LABELS,
+    SIMPLEITK_AXIS_LABELS,
+    CoordinateContext,
+    SNAP_ATOL,
+    canonical_coordinate_context,
+    canonicalize_array_and_affine,
+    compose_affine,
+    convert_affine_world_basis,
+    decompose_affine,
+)
 
 
 @contextmanager
@@ -99,40 +109,64 @@ class SimpleITKBackend:
 
     def save(self, filepath: Path, medvol) -> None:
         if self._is_nifti(filepath) and medvol.ndims == 4:
-            linear = medvol.affine[:-1, :-1]
-            if not np.allclose(medvol.affine[:3, 0], 0.0, atol=SNAP_ATOL) or not np.allclose(
-                medvol.affine[3, 1:4], 0.0, atol=SNAP_ATOL
+            canonical_array, canonical_affine, _ = canonicalize_array_and_affine(
+                medvol.array,
+                convert_affine_world_basis(
+                    medvol.affine,
+                    medvol._coordinate_context,
+                    CANONICAL_AXIS_LABELS,
+                    atol=SNAP_ATOL,
+                ),
+                canonical_coordinate_context(
+                    medvol.ndims,
+                    anatomical_ndim=3,
+                    anatomical_axes=tuple(range(3)),
+                ),
+                atol=SNAP_ATOL,
+            )
+            linear = canonical_affine[:-1, :-1]
+            if not np.allclose(canonical_affine[:3, 3], 0.0, atol=SNAP_ATOL) or not np.allclose(
+                canonical_affine[3, :3], 0.0, atol=SNAP_ATOL
             ):
                 raise ValueError(
-                    "4D NIfTI serialization with the SimpleITK backend requires a block-separable affine in backend-native axis order."
+                    "4D NIfTI serialization with the SimpleITK backend requires a block-separable affine."
                 )
-            if medvol.affine[3, 0] <= 0:
+            if linear[3, 3] <= 0:
                 raise ValueError("4D NIfTI serialization requires a positive 4th-axis scale.")
 
-            spatial_lps = np.eye(4, dtype=float)
-            spatial_lps[:3, 0] = linear[:3, 3]
-            spatial_lps[:3, 1] = linear[:3, 2]
-            spatial_lps[:3, 2] = linear[:3, 1]
-            spatial_lps[:3, 3] = medvol.affine[:3, 4]
-            spatial_ras = self._lps_from_ras @ spatial_lps
-
             image = nib.Nifti1Image(
-                medvol.array.transpose(3, 2, 1, 0),
-                spatial_ras,
+                canonical_array,
+                np.block(
+                    [
+                        [linear[:3, :3], canonical_affine[:3, 4:5]],
+                        [np.zeros((1, 3), dtype=float), np.ones((1, 1), dtype=float)],
+                    ]
+                ),
             )
             zooms = image.header.get_zooms()
-            image.header.set_zooms(zooms[:3] + (float(medvol.affine[3, 0]),))
-            image.header["toffset"] = float(medvol.affine[3, 4])
+            image.header.set_zooms(zooms[:3] + (float(linear[3, 3]),))
+            image.header["toffset"] = float(canonical_affine[3, 4])
             nib.save(image, str(filepath))
             return
 
-        spacing, origin, direction = decompose_affine(medvol.affine)
-        permutation = np.arange(medvol.ndims)[::-1]
+        affine = convert_affine_world_basis(
+            medvol.affine,
+            medvol._coordinate_context,
+            SIMPLEITK_AXIS_LABELS[: min(medvol.ndims, 3)],
+            atol=SNAP_ATOL,
+        )
+        reverse_transform = np.zeros((medvol.ndims + 1, medvol.ndims + 1), dtype=float)
+        reverse_transform[-1, -1] = 1.0
+        for sitk_axis in range(medvol.ndims):
+            reverse_transform[medvol.ndims - 1 - sitk_axis, sitk_axis] = 1.0
+
+        sitk_affine = affine @ reverse_transform
+        spacing, origin, direction = decompose_affine(sitk_affine)
 
         image = sitk.GetImageFromArray(medvol.array, isVector=False)
-        image.SetSpacing(spacing[permutation].tolist())
+        image.SetSpacing(spacing.tolist())
         image.SetOrigin(origin.tolist())
-        image.SetDirection(direction[:, permutation].flatten().tolist())
+        image.SetDirection(direction.flatten().tolist())
 
         if medvol.backend == self.name and isinstance(medvol.header, dict):
             for key, value in medvol.header.items():

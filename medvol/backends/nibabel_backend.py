@@ -6,7 +6,15 @@ import nibabel as nib
 import numpy as np
 
 from medvol.backends.base import BackendLoadResult
-from medvol.geometry import CoordinateContext, SNAP_ATOL, validate_affine
+from medvol.geometry import (
+    CANONICAL_AXIS_LABELS,
+    CoordinateContext,
+    SNAP_ATOL,
+    canonical_coordinate_context,
+    canonicalize_array_and_affine,
+    convert_affine_world_basis,
+    validate_affine,
+)
 
 
 class NibabelBackend:
@@ -47,18 +55,34 @@ class NibabelBackend:
 
     def save(self, filepath: Path, medvol) -> None:
         header = medvol.header.copy() if medvol.backend == self.name and medvol.header is not None else None
+        affine = convert_affine_world_basis(
+            medvol.affine,
+            medvol._coordinate_context,
+            CANONICAL_AXIS_LABELS[: min(medvol.ndims, 3)],
+            atol=SNAP_ATOL,
+        )
+        array = medvol.array
+        context = canonical_coordinate_context(
+            medvol.ndims,
+            anatomical_ndim=min(medvol.ndims, 3),
+            anatomical_axes=tuple(range(min(medvol.ndims, 3))),
+        )
 
         if medvol.ndims == 2:
-            affine = np.eye(4, dtype=float)
-            source = medvol.affine
-            affine[:2, :2] = source[:2, :2]
-            affine[:2, 3] = source[:2, 2]
-            image = nib.Nifti1Image(medvol.array, affine, header=header)
+            nib_affine = np.eye(4, dtype=float)
+            nib_affine[:2, :2] = affine[:2, :2]
+            nib_affine[:2, 3] = affine[:2, 2]
+            image = nib.Nifti1Image(array, nib_affine, header=header)
         elif medvol.ndims == 3:
-            image = nib.Nifti1Image(medvol.array, medvol.affine, header=header)
+            image = nib.Nifti1Image(array, affine, header=header)
         elif medvol.ndims == 4:
-            source = medvol.affine
-            linear = source[:-1, :-1]
+            array, affine, context = canonicalize_array_and_affine(
+                array,
+                affine,
+                context,
+                atol=SNAP_ATOL,
+            )
+            linear = affine[:-1, :-1]
             if not np.allclose(linear[:3, 3], 0.0, atol=SNAP_ATOL) or not np.allclose(
                 linear[3, :3], 0.0, atol=SNAP_ATOL
             ):
@@ -68,13 +92,13 @@ class NibabelBackend:
             if linear[3, 3] <= 0:
                 raise ValueError("4D NIfTI serialization requires a positive 4th-axis scale.")
 
-            affine = np.eye(4, dtype=float)
-            affine[:3, :3] = linear[:3, :3]
-            affine[:3, 3] = source[:3, 4]
-            image = nib.Nifti1Image(medvol.array, affine, header=header)
+            nib_affine = np.eye(4, dtype=float)
+            nib_affine[:3, :3] = linear[:3, :3]
+            nib_affine[:3, 3] = affine[:3, 4]
+            image = nib.Nifti1Image(array, nib_affine, header=header)
             zooms = image.header.get_zooms()
             image.header.set_zooms(zooms[:3] + (float(linear[3, 3]),))
-            image.header["toffset"] = float(source[3, 4])
+            image.header["toffset"] = float(affine[3, 4])
         else:
             raise ValueError("NiBabel backend supports only 2D, 3D, and 4D arrays.")
 

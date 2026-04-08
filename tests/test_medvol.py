@@ -28,6 +28,15 @@ def test_constructor_rejects_removed_arguments():
         MedVol(np.zeros((3, 3)), copy=None)  # type: ignore[call-arg]
 
 
+def test_remove_obliqueness_requires_canonicalize():
+    with pytest.raises(ValueError):
+        MedVol(
+            np.zeros((3, 4, 5), dtype=np.float32),
+            canonicalize=False,
+            remove_obliqueness=True,
+        )
+
+
 def test_affine_is_source_of_truth_and_geometry_is_snapped():
     affine = np.array(
         [
@@ -78,18 +87,6 @@ def test_invalid_backend_for_extension_raises(tmp_path):
         MedVol(tmp_path / "bad.nrrd", backend="nibabel")
 
 
-def make_simpleitk_nifti_4d_affine() -> np.ndarray:
-    affine = np.zeros((5, 5), dtype=float)
-    affine[-1, -1] = 1.0
-    affine[3, 0] = 5.0
-    affine[:3, 1] = [0.0, 0.0, 4.0]
-    affine[:3, 2] = [0.0, 3.0, 0.0]
-    affine[:3, 3] = [2.0, 0.0, 0.0]
-    affine[:3, 4] = [10.0, 11.0, 12.0]
-    affine[3, 4] = 13.0
-    return affine
-
-
 @pytest.mark.parametrize(
     ("shape", "suffix"),
     [
@@ -102,12 +99,9 @@ def make_simpleitk_nifti_4d_affine() -> np.ndarray:
     ],
 )
 def test_simpleitk_roundtrip(shape, suffix, tmp_path):
-    if len(shape) == 4 and suffix == ".nii.gz":
-        affine = make_simpleitk_nifti_4d_affine()
-    else:
-        affine = np.eye(len(shape) + 1, dtype=float)
-        affine[:-1, :-1] = np.diag(np.arange(1, len(shape) + 1, dtype=float))
-        affine[:-1, -1] = np.arange(10, 10 + len(shape), dtype=float)
+    affine = np.eye(len(shape) + 1, dtype=float)
+    affine[:-1, :-1] = np.diag(np.arange(1, len(shape) + 1, dtype=float))
+    affine[:-1, -1] = np.arange(10, 10 + len(shape), dtype=float)
     first = MedVol(np.arange(np.prod(shape), dtype=np.float32).reshape(shape), affine=affine)
 
     path = tmp_path / f"simpleitk{suffix}"
@@ -119,9 +113,11 @@ def test_simpleitk_roundtrip(shape, suffix, tmp_path):
 
 
 def test_simpleitk_rejects_incompatible_4d_nifti_affine(tmp_path):
+    affine = np.eye(5, dtype=float)
+    affine[0, 3] = 1.0
     image = MedVol(
         np.zeros((2, 3, 4, 5), dtype=np.float32),
-        affine=np.diag([1.0, 2.0, 3.0, 4.0, 1.0]),
+        affine=affine,
     )
 
     with pytest.raises(ValueError):
@@ -197,8 +193,9 @@ def test_pynrrd_loads_non_spatial_4d_axis(tmp_path):
     image = MedVol(path, backend="pynrrd")
 
     assert image.affine.shape == (5, 5)
-    assert np.isclose(image.affine[3, 0], 7.0)
-    assert np.allclose(image.affine[:3, -1], [10.0, 11.0, 12.0])
+    assert image.coordinate_system == "RAS+"
+    assert image.array.shape == (3, 4, 5, 2)
+    assert np.isclose(image.affine[3, 3], 7.0)
 
 
 def test_backend_default_selection_and_raw_headers(tmp_path):
@@ -230,11 +227,43 @@ def test_backend_default_selection_and_raw_headers(tmp_path):
     assert reloaded.backend == "pynrrd"
 
 
-def test_coordinate_system_is_backend_native():
+def test_coordinate_system_is_backend_independent_by_default():
     path = REPO_ROOT / "examples/data/3d_img.nii.gz"
     nib_image = MedVol(path, backend="nibabel")
     sitk_image = MedVol(path, backend="simpleitk")
 
     assert nib_image.coordinate_system is not None
     assert sitk_image.coordinate_system is not None
+    assert nib_image.coordinate_system == "RAS+"
+    assert sitk_image.coordinate_system == "RAS+"
+    assert np.array_equal(nib_image.array, sitk_image.array)
+    assert np.allclose(nib_image.affine, sitk_image.affine)
+
+
+def test_canonicalize_false_preserves_backend_native_differences():
+    path = REPO_ROOT / "examples/data/3d_img.nii.gz"
+    nib_image = MedVol(path, backend="nibabel", canonicalize=False)
+    sitk_image = MedVol(path, backend="simpleitk", canonicalize=False)
+
     assert nib_image.coordinate_system != sitk_image.coordinate_system
+    assert not np.array_equal(nib_image.array, sitk_image.array)
+
+
+def test_remove_obliqueness_makes_affine_axis_aligned():
+    affine = np.array(
+        [
+            [1.0, 0.2, 0.0, 10.0],
+            [0.0, 2.0, 0.3, 11.0],
+            [0.0, 0.0, 3.0, 12.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
+    image = MedVol(
+        np.zeros((4, 5, 6), dtype=np.float32),
+        affine=affine,
+        remove_obliqueness=True,
+    )
+
+    assert image.coordinate_system == "RAS+"
+    assert np.allclose(image.affine[:3, :3], np.diag(image.spacing))
+    assert np.allclose(image.origin, [10.0, 11.0, 12.0])
