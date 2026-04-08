@@ -1,82 +1,73 @@
 # MedVol
 
-[![License Apache Software License 2.0](https://img.shields.io/pypi/l/medvol.svg?color=green)](https://github.com/Karol-G/medvol/raw/main/LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/medvol.svg?color=green)](https://pypi.org/project/medvol)
-[![Python Version](https://img.shields.io/pypi/pyversions/medvol.svg?color=green)](https://python.org)
+`medvol` is a small wrapper around `SimpleITK`, `nibabel`, and `pynrrd` that
+provides one interface for reading and writing 2D, 3D, and 4D NIfTI and NRRD
+images.
 
-A wrapper for loading medical 2D, 3D and 4D NIFTI or NRRD images.
+## Features
 
-Features:
-- Supports loading and saving of 2D, 3D and 4D Nifti and NRRD images
-    - (Saving 4D images is currently not supported due to a SimpleITK bug)
-- Simple access to image array
-- Simple access to image metadata
-    - Affine
-    - Spacing
-    - Origin
-    - Direction
-    - Translation
-    - Rotation
-    - Scale (Same as spacing)
-    - Shear
-    - Header (The raw header)
-- Copying/Modification of all or selected metadata across MedVol images
-
+- One `MedVol` API across `SimpleITK`, `nibabel`, and `pynrrd`
+- Automatic backend selection by extension
+  - NIfTI defaults to `nibabel`
+  - NRRD defaults to `pynrrd`
+- Explicit backend override with `backend=...`
+- `affine` as the single source of truth
+- Derived geometry properties:
+  - `spacing`
+  - `origin`
+  - `direction`
+  - `translation`
+  - `rotation`
+  - `scale`
+  - `shear`
+  - `coordinate_system`
+- Raw backend-native header access via `header`
 
 ## Installation
 
-You can install `medvol` via [pip](https://pypi.org/project/medvol/):
-
-    pip install medvol
+```bash
+pip install medvol
+```
 
 ## Example
 
 ```python
 from medvol import MedVol
 
-# Load NIFTI image
-image = MedVol("path/to/image.nifti")
+# Uses the bundled 3D NIfTI example.
+image = MedVol("examples/data/3d_img.nii.gz")
 
-# Print some metadata
-print("Spacing: ", image.spacing)
-print("Affine: ", image.affine)
-print("Rotation: ", image.rotation)
-print("Header: ", image.header)
-
-# Access and modify the image array
-arr = image.array
-arr[0, 0, 0] = 1
-
-# Create a new image with the new array, a new spacing, but copy all remaining metadata
-new_image = MedVol(arr, spacing=[2, 2, 2], copy=image)
-
-# Save the new image as NRRD
-new_image.save("path/to/new_image.nrrd")
+print("Backend:", image.backend)
+print("Shape:", image.array.shape)
+print("Coordinate system:", image.coordinate_system)
+print("Spacing:", image.spacing)
+print("Origin:", image.origin)
+print("Direction:\n", image.direction)
+print("Affine:\n", image.affine)
+print("Rotation:\n", image.rotation)
+print("Header type:", type(image.header).__name__)
+print("Center voxel:", image.array[tuple(size // 2 for size in image.array.shape)])
 ```
 
+See [example_showcase_3d_nifti.py](/home/k539i/Documents/projects/medvol/examples/example_showcase_3d_nifti.py) for a runnable version.
 
-## Contributing
+## Notes
 
-Contributions are very welcome. Tests can be run with [tox], please ensure
-the coverage at least stays the same before you submit a pull request.
+- Geometry and array layout are backend-native. The same file can expose
+  different `array`, `affine`, and `coordinate_system` values depending on the
+  backend used to load it.
+- For 4D NIfTI, `nibabel` and the `SimpleITK` NIfTI path only support
+  block-separable affines where the spatial axes do not couple to the 4th axis.
+  Unsupported 5x5 affines raise a `ValueError`.
+
+## Development
+
+Run the test suite with:
+
+```bash
+pytest -q
+```
 
 ## License
 
-Distributed under the terms of the [Apache Software License 2.0] license,
-"medvol" is free and open source software
-
-## Issues
-
-If you encounter any problems, please file an issue along with a detailed description.
-
-[Cookiecutter]: https://github.com/audreyr/cookiecutter
-[MIT]: http://opensource.org/licenses/MIT
-[BSD-3]: http://opensource.org/licenses/BSD-3-Clause
-[GNU GPL v3.0]: http://www.gnu.org/licenses/gpl-3.0.txt
-[GNU LGPL v3.0]: http://www.gnu.org/licenses/lgpl-3.0.txt
-[Apache Software License 2.0]: http://www.apache.org/licenses/LICENSE-2.0
-[Mozilla Public License 2.0]: https://www.mozilla.org/media/MPL/2.0/index.txt
-
-[tox]: https://tox.readthedocs.io/en/latest/
-[pip]: https://pypi.org/project/pip/
-[PyPI]: https://pypi.org/
+Distributed under the terms of the Apache Software License 2.0.
