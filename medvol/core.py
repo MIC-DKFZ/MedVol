@@ -7,6 +7,8 @@ import numpy as np
 
 from medvol.geometry import (
     SNAP_ATOL,
+    SIMPLEITK_AXIS_LABELS,
+    CoordinateContext,
     affine_to_rotation,
     affine_to_shear,
     canonical_coordinate_context,
@@ -21,6 +23,31 @@ from medvol.geometry import (
 from medvol.registry import get_backend, resolve_backend
 
 
+def _context_from_coordinate_system(
+    coordinate_system: str | None,
+    ndim: int,
+) -> CoordinateContext:
+    """Map a coordinate system string to a CoordinateContext.
+
+    None or "RAS+" → canonical RAS+ context (default, backward-compatible).
+    "LPS+"          → LPS+ context (SimpleITK / DICOM convention).
+    Anything else   → ValueError.
+    """
+    if coordinate_system is None or coordinate_system in {"RAS", "RAS+"}:
+        return canonical_coordinate_context(ndim)
+    if coordinate_system in {"LPS", "LPS+"}:
+        anatomical_ndim = min(ndim, 3)
+        return CoordinateContext(
+            axis_labels=SIMPLEITK_AXIS_LABELS[:anatomical_ndim],
+            anatomical_ndim=anatomical_ndim,
+            anatomical_axes=tuple(range(anatomical_ndim)),
+        )
+    raise ValueError(
+        f"Unsupported coordinate_system {coordinate_system!r}. "
+        "Supported values: 'RAS+', 'LPS+'."
+    )
+
+
 class MedVol:
     def __init__(
         self,
@@ -31,6 +58,7 @@ class MedVol:
         origin: Sequence[float] | None = None,
         direction: Sequence[Sequence[float]] | None = None,
         header: Any = None,
+        coordinate_system: str | None = None,
         backend: str | None = None,
         canonicalize: bool = True,
         remove_obliqueness: bool = False,
@@ -45,6 +73,10 @@ class MedVol:
         self._remove_obliqueness = remove_obliqueness
 
         if isinstance(source, (str, Path)):
+            if coordinate_system is not None:
+                raise ValueError(
+                    "coordinate_system cannot be set when loading from a file."
+                )
             if any(value is not None for value in (affine, spacing, origin, direction)):
                 raise ValueError(
                     "affine, spacing, origin, and direction cannot be set when loading from a file."
@@ -76,7 +108,7 @@ class MedVol:
                 atol=SNAP_ATOL,
             )
         self._header = header
-        self._coordinate_context = canonical_coordinate_context(self.ndims)
+        self._coordinate_context = _context_from_coordinate_system(coordinate_system, self.ndims)
         self._apply_orientation_policy()
 
     def _apply_orientation_policy(self) -> None:

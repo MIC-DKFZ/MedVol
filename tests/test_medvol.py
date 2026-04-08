@@ -249,6 +249,54 @@ def test_canonicalize_false_preserves_backend_native_differences():
     assert not np.array_equal(nib_image.array, sitk_image.array)
 
 
+def test_coordinate_system_param_lps_canonicalizes_to_ras():
+    # An LPS+ array with identity direction: axes 0 and 1 must be flipped to RAS+.
+    array = np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4)
+    affine = np.diag([1.5, 2.0, 3.0, 1.0])
+
+    image = MedVol(array, affine=affine, coordinate_system="LPS+")
+
+    assert image.coordinate_system == "RAS+"
+    # Axes 0 and 1 should be flipped relative to the input.
+    assert np.array_equal(image.array, np.flip(np.flip(array, axis=0), axis=1))
+
+
+def test_coordinate_system_param_lps_no_canonicalize_preserves_orientation():
+    array = np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4)
+    affine = np.diag([1.5, 2.0, 3.0, 1.0])
+
+    image = MedVol(array, affine=affine, coordinate_system="LPS+", canonicalize=False)
+
+    assert image.coordinate_system == "LPS+"
+    assert np.array_equal(image.array, array)
+
+
+def test_coordinate_system_param_ras_is_noop():
+    array = np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4)
+    affine = np.diag([1.5, 2.0, 3.0, 1.0])
+
+    default_image = MedVol(array, affine=affine)
+    explicit_image = MedVol(array, affine=affine, coordinate_system="RAS+")
+
+    assert np.array_equal(default_image.array, explicit_image.array)
+    assert np.allclose(default_image.affine, explicit_image.affine)
+    assert explicit_image.coordinate_system == "RAS+"
+
+
+def test_coordinate_system_param_invalid_raises():
+    with pytest.raises(ValueError, match="Unsupported coordinate_system"):
+        MedVol(np.zeros((3, 4, 5), dtype=np.float32), coordinate_system="scanner-xyz")
+
+
+def test_coordinate_system_param_with_filepath_raises(tmp_path):
+    image = MedVol(np.zeros((3, 4, 5), dtype=np.float32))
+    path = tmp_path / "img.nii.gz"
+    image.save(path)
+
+    with pytest.raises(ValueError, match="coordinate_system cannot be set when loading from a file"):
+        MedVol(path, coordinate_system="RAS+")
+
+
 def test_remove_obliqueness_makes_affine_axis_aligned():
     affine = np.array(
         [
