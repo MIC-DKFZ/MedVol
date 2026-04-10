@@ -1,81 +1,82 @@
 # MedVol
 
-`medvol` is a small wrapper around `SimpleITK`, `nibabel`, and `pynrrd` that
-provides one interface for reading and writing 2D, 3D, and 4D NIfTI and NRRD
-images.
+[![PyPI version](https://img.shields.io/pypi/v/medvol)](https://pypi.org/project/medvol/)
+[![Python versions](https://img.shields.io/pypi/pyversions/medvol)](https://pypi.org/project/medvol/)
+[![Build status](https://img.shields.io/github/actions/workflow/status/MIC-DKFZ/MedVol/test_and_deploy.yml?branch=main)](https://github.com/MIC-DKFZ/MedVol/actions)
+[![License](https://img.shields.io/github/license/MIC-DKFZ/MedVol)](https://github.com/MIC-DKFZ/MedVol/blob/main/LICENSE)
 
-## Features
+A lightweight Python wrapper that unifies **SimpleITK**, **nibabel**, and **pynrrd** under a single, simple API for reading and writing 2‑D, 3‑D, and 4‑D medical images in NIfTI (`.nii/.nii.gz`) and NRRD (`.nrrd`) formats.
 
-- One `MedVol` API across `SimpleITK`, `nibabel`, and `pynrrd`
-- Automatic backend selection by extension
-  - NIfTI defaults to `nibabel`
-  - NRRD defaults to `pynrrd`
-- Explicit backend override with `backend=...`
-- Canonical `RAS+` orientation by default across backends with `canonicalize=True`
-- Optional geometry-only deobliquing with `remove_obliqueness=True`
-- `affine` as the single source of truth
-- Derived geometry properties:
-  - `spacing`
-  - `origin`
-  - `direction`
-  - `translation`
-  - `rotation`
-  - `scale`
-  - `shear`
-  - `coordinate_system`
-- Raw backend-native header access via `header`
 
-## Installation
+## ✨ Features
+
+- **Unified API** – one `MedVol` class works with all three back‑ends.
+- **Automatic backend selection** based on file extension:
+  - `.nii/.nii.gz` → `nibabel`
+  - `.nrrd` → `pynrrd`
+- **Explicit backend override** via the `backend=` argument.
+- **Canonical `RAS+` orientation** by default (no interpolation).
+- Optional **de‑obliquing** via `get_geometry(deoblique=True)`.
+- Geometry is stored in a single source of truth – the affine matrix.
+- Convenient derived properties: `spacing`, `origin`, `direction`, `rotation`, `shear`, `coordinate_system`.
+- Direct access to the raw backend header through `header`.
+
+
+## 📦 Installation
 
 ```bash
 pip install medvol
 ```
 
-## Example
+
+## 🚀 Quick start
 
 ```python
 from medvol import MedVol
 
-# Uses the bundled 3D NIfTI example.
-image = MedVol("examples/data/3d_img.nii.gz")
+# Load the bundled 3‑D example image (NIfTI).
+img = MedVol("examples/data/3d_img.nii.gz")
 
-print("Backend:", image.backend)
-print("Shape:", image.array.shape)
-print("Coordinate system:", image.coordinate_system)
-print("Spacing:", image.spacing)
-print("Origin:", image.origin)
-print("Direction:\n", image.direction)
-print("Affine:\n", image.affine)
-print("Rotation:\n", image.rotation)
-print("Header type:", type(image.header).__name__)
-print("Center voxel:", image.array[tuple(size // 2 for size in image.array.shape)])
+print("Backend:", img.backend)
+print("Shape:", img.array.shape)
+print("Coordinate system:", img.coordinate_system)
+print("Spacing:", img.spacing)
+print("Origin:", img.origin)
+print("Direction:\n", img.direction)
+print("Affine:\n", img.affine)
+print("Rotation:\n", img.rotation)
+print("Header type:", type(img.header).__name__)
 
-# Opt out of canonicalization to inspect backend-native geometry.
-native_image = MedVol("examples/data/3d_img.nii.gz", backend="simpleitk", canonicalize=False)
-print("Native coordinate system:", native_image.coordinate_system)
+# Access the centre voxel value.
+center = tuple(s // 2 for s in img.array.shape)
+print("Center voxel:", img.array[center])
 ```
 
-See [example_showcase_3d_nifti.py](/home/k539i/Documents/projects/medvol/examples/example_showcase_3d_nifti.py) for a runnable version.
+To inspect the native geometry without canonicalisation:
 
-## Notes
-
-- By default, MedVol canonicalizes loaded images to the closest array-aligned
-  `RAS+` orientation without interpolating voxel values.
-- Use `canonicalize=False` to preserve backend-native array order and geometry.
-- Use `remove_obliqueness=True` together with canonicalization to strip
-  obliqueness from the affine while leaving voxel values untouched.
-- For 4D NIfTI, `nibabel` and the `SimpleITK` NIfTI path only support
-  block-separable affines where the spatial axes do not couple to the 4th axis.
-  Unsupported 5x5 affines raise a `ValueError`.
-
-## Development
-
-Run the test suite with:
-
-```bash
-pytest -q
+```python
+native = MedVol(
+    "examples/data/3d_img.nii.gz",
+    backend="simpleitk",
+    canonicalize=False,
+)
+print("Native coordinate system:", native.coordinate_system)
 ```
 
-## License
+See the runnable demo at `examples/example_showcase_3d_nifti.py`.
 
-Distributed under the terms of the Apache Software License 2.0.
+
+## Contributing
+
+Contributions are welcome! Please open a pull request with clear changes and add tests when appropriate.
+
+## Acknowledgments
+
+<p align="left">
+  <img src="https://github.com/MIC-DKFZ/vidata/raw/main/imgs/Logos/HI_Logo.png" width="150"> &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://github.com/MIC-DKFZ/vidata/raw/main/imgs/Logos/DKFZ_Logo.png" width="500">
+</p>
+
+This repository is developed and maintained by the Applied Computer Vision Lab (ACVL)
+of [Helmholtz Imaging](https://www.helmholtz-imaging.de/) and the
+[Division of Medical Image Computing](https://www.dkfz.de/en/medical-image-computing) at DKFZ.
