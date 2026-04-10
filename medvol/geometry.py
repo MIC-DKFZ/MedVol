@@ -374,3 +374,85 @@ def is_homogeneous_row(row: Iterable[float], *, atol: float = SNAP_ATOL) -> bool
     expected = np.zeros_like(row_array)
     expected[-1] = 1.0
     return np.allclose(row_array, expected, atol=atol)
+
+
+# Maps each anatomical letter to (ras_axis_index, flip).
+# ras_axis_index: which of the 3 RAS axes (R=0, A=1, S=2) this letter belongs to.
+# flip: True when the letter denotes the negative direction of that axis (L, P, I).
+_AXIS_LETTER_MAP: dict[str, tuple[int, bool]] = {
+    "R": (0, False),
+    "L": (0, True),
+    "A": (1, False),
+    "P": (1, True),
+    "S": (2, False),
+    "I": (2, True),
+}
+
+
+def parse_coordinate_system(
+    cs_str: str,
+    spatial_ndim: int = 3,
+) -> tuple[list[int], list[bool]]:
+    """Parse a coordinate system string into (axis_order, flips) relative to RAS+.
+
+    Args:
+        cs_str: Coordinate system string, e.g. "LPS+", "ASR+", "RAS".
+            Must contain exactly ``spatial_ndim`` anatomical letters
+            (R/L, A/P, S/I), each from a different anatomical axis, with an
+            optional trailing "+" or "−".
+        spatial_ndim: Number of expected spatial axes (2 or 3).
+
+    Returns:
+        axis_order: ``axis_order[m]`` is the index (0=R/L, 1=A/P, 2=S/I) of the
+            RAS+ axis that corresponds to output axis ``m``.
+        flips: ``flips[m]`` is True when output axis ``m`` runs in the negative
+            direction of the corresponding RAS+ axis (e.g. L, P, I).
+
+    Raises:
+        ValueError: For unknown letters, wrong length, or duplicate axes.
+    """
+    cs = cs_str.rstrip("+-").upper()
+    if len(cs) != spatial_ndim:
+        raise ValueError(
+            f"Coordinate system {cs_str!r} must have {spatial_ndim} anatomical "
+            f"letters (got {len(cs)})."
+        )
+
+    axis_order: list[int] = []
+    flips: list[bool] = []
+    used_axes: set[int] = set()
+
+    for letter in cs:
+        if letter not in _AXIS_LETTER_MAP:
+            raise ValueError(
+                f"Unknown axis letter {letter!r} in coordinate system {cs_str!r}. "
+                "Valid letters: R, L, A, P, S, I."
+            )
+        ras_axis, flip = _AXIS_LETTER_MAP[letter]
+        if ras_axis in used_axes:
+            raise ValueError(
+                f"Duplicate anatomical axis in coordinate system {cs_str!r}."
+            )
+        used_axes.add(ras_axis)
+        axis_order.append(ras_axis)
+        flips.append(flip)
+
+    return axis_order, flips
+
+
+def _is_signed_permutation(matrix: np.ndarray, *, atol: float = SNAP_ATOL) -> bool:
+    """Return True if *matrix* is approximately a signed permutation matrix.
+
+    A signed permutation matrix has exactly one entry ±1 per row and per column
+    and zeros elsewhere (up to *atol*).
+    """
+    m = np.asarray(matrix, dtype=float)
+    abs_m = np.abs(m)
+    # Every entry must be close to 0 or 1.
+    if not np.all((abs_m < atol) | (np.abs(abs_m - 1.0) < atol)):
+        return False
+    # Each row and each column must have exactly one nonzero entry.
+    return bool(
+        np.all(np.sum(abs_m > atol, axis=0) == 1)
+        and np.all(np.sum(abs_m > atol, axis=1) == 1)
+    )

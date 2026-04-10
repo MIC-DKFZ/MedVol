@@ -28,14 +28,6 @@ def test_constructor_rejects_removed_arguments():
         MedVol(np.zeros((3, 3)), copy=None)  # type: ignore[call-arg]
 
 
-def test_remove_obliqueness_requires_canonicalize():
-    with pytest.raises(ValueError):
-        MedVol(
-            np.zeros((3, 4, 5), dtype=np.float32),
-            canonicalize=False,
-            remove_obliqueness=True,
-        )
-
 
 def test_affine_is_source_of_truth_and_geometry_is_snapped():
     affine = np.array(
@@ -297,7 +289,62 @@ def test_coordinate_system_param_with_filepath_raises(tmp_path):
         MedVol(path, coordinate_system="RAS+")
 
 
-def test_remove_obliqueness_makes_affine_axis_aligned():
+def test_get_geometry_identity():
+    """get_geometry("RAS+") returns the same geometry as the internal state."""
+    affine = np.diag([1.5, 2.0, 3.0, 1.0])
+    affine[:3, 3] = [10.0, 11.0, 12.0]
+    image = MedVol(np.zeros((4, 5, 6), dtype=np.float32), affine=affine)
+
+    geom = image.get_geometry("RAS+")
+
+    assert geom["coordinate_system"] == "RAS+"
+    assert np.allclose(geom["affine"], image.affine)
+    assert np.allclose(geom["spacing"], image.spacing)
+    assert np.allclose(geom["origin"], image.origin)
+    assert not geom["oblique"]
+
+
+def test_get_geometry_lps():
+    """get_geometry("LPS+") flips axes 0 and 1 and negates the corresponding world rows."""
+    sx, sy, sz = 1.5, 2.0, 3.0
+    ox, oy, oz = 10.0, 11.0, 12.0
+    Nx, Ny, Nz = 4, 5, 6
+    affine = np.diag([sx, sy, sz, 1.0])
+    affine[:3, 3] = [ox, oy, oz]
+    image = MedVol(np.zeros((Nx, Ny, Nz), dtype=np.float32), affine=affine)
+
+    geom = image.get_geometry("LPS+")
+
+    assert geom["coordinate_system"] == "LPS+"
+    # Spacing is always positive.
+    assert np.allclose(geom["spacing"][:3], [sx, sy, sz])
+    # Origin shifts to the far corners of the flipped axes.
+    expected_origin = [-(ox + sx * (Nx - 1)), -(oy + sy * (Ny - 1)), oz]
+    assert np.allclose(geom["origin"][:3], expected_origin)
+    assert not geom["oblique"]
+    # Internal state untouched.
+    assert image.coordinate_system == "RAS+"
+    assert np.allclose(image.origin, [ox, oy, oz])
+
+
+def test_get_geometry_permuted_axes():
+    """get_geometry("ASR+") reorders axes A→0, S→1, R→2."""
+    sx, sy, sz = 1.5, 2.0, 3.0
+    ox, oy, oz = 10.0, 11.0, 12.0
+    affine = np.diag([sx, sy, sz, 1.0])
+    affine[:3, 3] = [ox, oy, oz]
+    image = MedVol(np.zeros((4, 5, 6), dtype=np.float32), affine=affine)
+
+    geom = image.get_geometry("ASR+")
+
+    # ASR+ → axis 0 = A (sy), axis 1 = S (sz), axis 2 = R (sx).
+    assert np.allclose(geom["spacing"][:3], [sy, sz, sx])
+    assert np.allclose(geom["origin"][:3], [oy, oz, ox])
+    assert not geom["oblique"]
+
+
+def test_get_geometry_deoblique():
+    """get_geometry(deoblique=True) returns a diagonal affine with same origin."""
     affine = np.array(
         [
             [1.0, 0.2, 0.0, 10.0],
@@ -306,12 +353,77 @@ def test_remove_obliqueness_makes_affine_axis_aligned():
             [0.0, 0.0, 0.0, 1.0],
         ]
     )
-    image = MedVol(
-        np.zeros((4, 5, 6), dtype=np.float32),
-        affine=affine,
-        remove_obliqueness=True,
-    )
+    image = MedVol(np.zeros((4, 5, 6), dtype=np.float32), affine=affine)
 
-    assert image.coordinate_system == "RAS+"
-    assert np.allclose(image.affine[:3, :3], np.diag(image.spacing))
-    assert np.allclose(image.origin, [10.0, 11.0, 12.0])
+    geom = image.get_geometry("RAS+", deoblique=True)
+
+    assert np.allclose(geom["affine"][:3, :3], np.diag(geom["spacing"][:3]))
+    assert np.allclose(geom["origin"][:3], [10.0, 11.0, 12.0])
+    # Internal affine is NOT deobliqued.
+    assert not np.allclose(image.affine[:3, :3], np.diag(image.spacing))
+
+
+def test_get_geometry_oblique_flag():
+    """oblique=True for non-axis-aligned direction, False otherwise."""
+    diagonal_affine = np.diag([1.5, 2.0, 3.0, 1.0])
+    oblique_affine = np.array(
+        [[1.0, 0.2, 0.0, 0.0], [0.0, 2.0, 0.3, 0.0], [0.0, 0.0, 3.0, 0.0], [0.0, 0.0, 0.0, 1.0]]
+    )
+    non_oblique = MedVol(np.zeros((3, 4, 5), dtype=np.float32), affine=diagonal_affine)
+    oblique = MedVol(np.zeros((3, 4, 5), dtype=np.float32), affine=oblique_affine)
+
+    assert not non_oblique.get_geometry("RAS+")["oblique"]
+    assert oblique.get_geometry("RAS+")["oblique"]
+
+
+def test_get_geometry_requires_canonicalize():
+    image = MedVol(
+        np.zeros((3, 4, 5), dtype=np.float32),
+        coordinate_system="RAS+",
+        canonicalize=False,
+    )
+    with pytest.raises(ValueError, match="canonicalize"):
+        image.get_geometry("LPS+")
+
+
+def test_get_array_identity():
+    """get_array("RAS+") returns the same data as the internal array."""
+    image = MedVol(np.arange(60, dtype=np.float32).reshape(3, 4, 5))
+
+    result = image.get_array("RAS+")
+
+    assert np.array_equal(result, image.array)
+
+
+def test_get_array_lps():
+    """get_array("LPS+") flips axes 0 and 1."""
+    array = np.arange(60, dtype=np.float32).reshape(3, 4, 5)
+    image = MedVol(array)
+
+    result = image.get_array("LPS+")
+
+    expected = np.flip(np.flip(image.array, axis=0), axis=1)
+    assert np.array_equal(result, expected)
+    # Zero-copy view — no data duplication.
+    assert result.base is not None
+
+
+def test_get_array_permuted():
+    """get_array("ASR+") transposes to (A, S, R) order."""
+    array = np.arange(60, dtype=np.float32).reshape(3, 4, 5)
+    image = MedVol(array)
+
+    result = image.get_array("ASR+")
+
+    assert result.shape == (image.array.shape[1], image.array.shape[2], image.array.shape[0])
+    assert np.array_equal(result, np.transpose(image.array, (1, 2, 0)))
+
+
+def test_get_array_requires_canonicalize():
+    image = MedVol(
+        np.zeros((3, 4, 5), dtype=np.float32),
+        coordinate_system="RAS+",
+        canonicalize=False,
+    )
+    with pytest.raises(ValueError, match="canonicalize"):
+        image.get_array("LPS+")

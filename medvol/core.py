@@ -9,6 +9,7 @@ from medvol.geometry import (
     SNAP_ATOL,
     SIMPLEITK_AXIS_LABELS,
     CoordinateContext,
+    _is_signed_permutation,
     affine_to_rotation,
     affine_to_shear,
     canonical_coordinate_context,
@@ -18,6 +19,8 @@ from medvol.geometry import (
     deoblique_affine,
     decompose_affine,
     normalize_backend_name,
+    parse_coordinate_system,
+    snap_values,
     validate_affine,
 )
 from medvol.registry import get_backend, resolve_backend
@@ -61,16 +64,11 @@ class MedVol:
         coordinate_system: str | None = None,
         backend: str | None = None,
         canonicalize: bool = True,
-        remove_obliqueness: bool = False,
     ) -> None:
-        if remove_obliqueness and not canonicalize:
-            raise ValueError("remove_obliqueness requires canonicalize=True.")
-
         self._coordinate_context = None
         self._header = None
         self._backend = normalize_backend_name(backend)
         self._canonicalize = canonicalize
-        self._remove_obliqueness = remove_obliqueness
 
         if isinstance(source, (str, Path)):
             if coordinate_system is not None:
@@ -119,8 +117,6 @@ class MedVol:
                 self._coordinate_context,
                 atol=SNAP_ATOL,
             )
-        if self._remove_obliqueness:
-            self._affine = deoblique_affine(self._affine, atol=SNAP_ATOL)
 
     @staticmethod
     def _validate_array(array: np.ndarray) -> np.ndarray:
@@ -227,6 +223,135 @@ class MedVol:
     @property
     def backend(self) -> str | None:
         return self._backend
+
+    def get_geometry(
+        self,
+        coordinate_system: str = "RAS+",
+        *,
+        deoblique: bool = False,
+    ) -> dict:
+        """Return geometry converted to the requested coordinate system.
+
+        The internal state is not modified — only the returned values are
+        converted.  Requires ``canonicalize=True`` (raises ``ValueError``
+        otherwise).
+
+        Args:
+            coordinate_system: Target coordinate system, e.g. ``"RAS+"``,
+                ``"LPS+"``, ``"ASR+"``.  Must contain exactly
+                ``spatial_ndim`` anatomical letters (R/L, A/P, S/I), each
+                from a different anatomical axis, with an optional trailing
+                ``"+"``.
+            deoblique: If ``True``, strip off-diagonal entries from the
+                returned affine (diagonal affine, keeps origin).  Equivalent
+                to calling ``get_geometry(deoblique=False)`` and then
+                removing the oblique component.
+
+        Returns:
+            Dict with keys:
+
+            * ``"affine"`` — (ndim+1)×(ndim+1) affine in the target system.
+            * ``"spacing"`` — always-positive voxel spacing (column norms).
+            * ``"origin"`` — world coordinates of voxel (0, 0, …, 0).
+            * ``"direction"`` — unit-column direction cosine matrix.
+            * ``"coordinate_system"`` — the *coordinate_system* argument.
+            * ``"oblique"`` — ``True`` when the spatial direction block is
+              not a signed permutation matrix (i.e. the image is oblique).
+
+        Raises:
+            ValueError: If ``canonicalize=False`` or the coordinate context
+                is unknown.
+        """
+        if not self._canonicalize:
+            raise ValueError("get_geometry requires canonicalize=True.")
+        if self._coordinate_context is None:
+            raise ValueError(
+                "get_geometry requires a known coordinate context. "
+                "Load from a file with a recognised coordinate system."
+            )
+
+        spatial_ndim = self._coordinate_context.anatomical_ndim
+        axis_order, flips = parse_coordinate_system(coordinate_system, spatial_ndim)
+        signs = [-1 if f else 1 for f in flips]
+
+        A = self._affine
+        shape = self._array.shape
+
+        # ── Step 1: permute and sign spatial columns (data-axis transform) ──
+        # Read from original A; write to A_mid so we never clobber a source col.
+        A_mid = A.copy()
+        for m in range(spatial_ndim):
+            A_mid[:, m] = signs[m] * A[:, axis_order[m]]
+        # Adjust translation column for flipped axes:
+        # flip on axis m maps voxel i → (N-1-i), shifting the origin to the far corner.
+        for m in range(spatial_ndim):
+            if flips[m]:
+                A_mid[:, -1] += A[:, axis_order[m]] * (shape[axis_order[m]] - 1)
+
+        # ── Step 2: permute and sign spatial rows (world-basis transform) ──
+        A_final = A_mid.copy()
+        for m in range(spatial_ndim):
+            A_final[m, :] = signs[m] * A_mid[axis_order[m], :]
+
+        A_final = snap_values(A_final)
+
+        if deoblique:
+            A_final = deoblique_affine(A_final)
+
+        spacing, origin, direction = decompose_affine(A_final)
+
+        # Oblique iff the spatial direction block is not a signed permutation.
+        spatial_dir = direction[:spatial_ndim, :spatial_ndim]
+        is_oblique = not _is_signed_permutation(spatial_dir)
+
+        return {
+            "affine": A_final,
+            "spacing": spacing,
+            "origin": origin,
+            "direction": direction,
+            "coordinate_system": coordinate_system,
+            "oblique": is_oblique,
+        }
+
+    def get_array(self, coordinate_system: str = "RAS+") -> np.ndarray:
+        """Return the array converted to the requested coordinate system.
+
+        Returns a zero-copy NumPy view — no interpolation is performed.
+        Only axis permutations and flips are applied.  Requires
+        ``canonicalize=True`` (raises ``ValueError`` otherwise).
+
+        Args:
+            coordinate_system: Target coordinate system string (see
+                ``get_geometry`` for the accepted format).
+
+        Returns:
+            NumPy array in the requested axis order and orientation.
+            Non-spatial axes (e.g. time for 4-D images) are appended
+            unchanged at the end.
+
+        Raises:
+            ValueError: If ``canonicalize=False`` or the coordinate context
+                is unknown.
+        """
+        if not self._canonicalize:
+            raise ValueError("get_array requires canonicalize=True.")
+        if self._coordinate_context is None:
+            raise ValueError(
+                "get_array requires a known coordinate context."
+            )
+
+        spatial_ndim = self._coordinate_context.anatomical_ndim
+        axis_order, flips = parse_coordinate_system(coordinate_system, spatial_ndim)
+
+        # Non-spatial axes (e.g. time) stay at the end, in their original order.
+        full_axis_order = list(axis_order) + list(range(spatial_ndim, self.ndims))
+        result = np.transpose(self._array, full_axis_order)
+
+        for m, flip in enumerate(flips):
+            if flip:
+                result = np.flip(result, axis=m)
+
+        return result
 
     def save(self, filepath: str | Path, *, backend: str | None = None) -> None:
         resolved_backend = resolve_backend(filepath, backend)
