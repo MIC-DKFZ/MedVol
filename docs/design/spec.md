@@ -87,7 +87,7 @@ Before writing, MedVol compares the `Image` against the capabilities. Anything t
 either raises (policy `on_loss: error`) or is reported and dropped (`warn`, default). Examples:
 - a sheared matrix to a NIfTI qform-only reader;
 - a direction matrix to `.vtk`/`.tif` (KB ch04 §13);
-- a NIfTI `descrip` written to NRRD: dropped and reported. Fields of one format are never copied into another
+- a NIfTI `descrip` written to NRRD: not written, reported. Fields of one format are never copied into another
   format's custom keys (§6).
 
 ## 4. Field ownership (how `source` stays in sync)

@@ -82,6 +82,11 @@ def write(image: Image, path: PathLike, format: Optional[str] = None, policy: Op
     plugin = registry.for_writing(path, format)
     report = Report("write", plugin.name, str(path))
     check_capabilities(image, plugin.capabilities, report, policy)
+    if plugin.name != "mla":
+        for entry in image.meta.source:
+            if entry.format != plugin.name:
+                report.warn(f"source header ({entry.format}): its fields are not written to {plugin.name}; "
+                            "only the core is converted (spec 6, 9)")
     extra = {"reference": reference} if reference is not None else {}
     report.extend(plugin.write(image, path, policy, **extra))
     return report

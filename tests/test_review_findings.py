@@ -69,6 +69,14 @@ class TestDeferredFindings(unittest.TestCase):
         self.assertEqual(image.dtype, np.int16)
         self.assertEqual((image.values.scale, image.values.offset), (0.5, 10.0))
 
+    def test_m18_foreign_source_headers_are_reported_not_copied(self):
+        path = phantom.write_nifti(self.dir / "a.nii.gz", extra={"descrip": "only nifti"})
+        image, _ = medvol.read(path)
+        report = medvol.write(image, self.dir / "b.nrrd")
+        self.assertTrue(any(w.startswith("source header (nifti)") for w in report.warnings))
+        self.assertNotIn(b"only nifti", (self.dir / "b.nrrd").read_bytes())
+        self.assertEqual(medvol.write(image, self.dir / "b.mla").warnings, [])
+
 
 if __name__ == "__main__":
     unittest.main()
