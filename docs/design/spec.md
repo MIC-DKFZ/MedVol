@@ -2,6 +2,7 @@
 
 Status: **draft for discussion, not implemented.** Branch `rework/v2`. Last update: 2026-11-06.
 Companion spec: MLArray v1 format and metadata (`mlarray` repo, branch `rework/v1`, `docs/design/spec.md`).
+Process and handoff (stages 1–4, this spec is stage 4): `mlarray` repo, branch `rework/v1`, `docs/design/rework-plan.md`.
 Evidence base for every behaviour claim about other libraries: `~/projects/image-orientation-kb` ("KB").
 
 ---
