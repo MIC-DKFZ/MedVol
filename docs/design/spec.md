@@ -1,6 +1,6 @@
 # MedVol v2 — N:N image converter specification (draft)
 
-Status: **draft for discussion, not implemented.** Branch `rework/v2`. Last update: 2026-11-06.
+Status: **implemented on branch `rework/v2`** (gaps listed in the mlarray rework plan §6). Branch `rework/v2`. Last update: 2026-11-06.
 Companion spec: MLArray v1 format and metadata (`mlarray` repo, branch `rework/v1`, `docs/design/spec.md`).
 Process and handoff (stages 1–4, this spec is stage 4): `mlarray` repo, branch `rework/v1`, `docs/design/rework-plan.md`.
 Evidence base for every behaviour claim about other libraries: `~/projects/image-orientation-kb` ("KB").
@@ -87,7 +87,8 @@ Before writing, MedVol compares the `Image` against the capabilities. Anything t
 either raises (policy `on_loss: error`) or is reported and dropped (`warn`, default). Examples:
 - a sheared matrix to a NIfTI qform-only reader;
 - a direction matrix to `.vtk`/`.tif` (KB ch04 §13);
-- a NIfTI `descrip` into NRRD (kept as a key-value pair, reported).
+- a NIfTI `descrip` written to NRRD: dropped and reported. Fields of one format are never copied into another
+  format's custom keys (§6).
 
 ## 4. Field ownership (how `source` stays in sync)
 
@@ -118,6 +119,7 @@ to the report.
 | `dicom_tilt` | `exact` (sheared matrix), `resample`, `error` | `exact` | ITK readers silently misplace tilted slices by > 40 mm (ch02, real data) |
 | `dicom_irregular_spacing` | `error`, `split`, `resample` | `error` | dcm2niix plain output 2 mm off; GDCM fallbacks (ch02) |
 | `dicom_stacks` | `split` (one Image per geometric stack), `largest`, `error` | `split` | localizers in a series: 53 mm error in SimpleITK (ch02) |
+| `dicom_rescale` | `error`, `apply` (store physical values as float; re-emitted exactly per slice) | `error` | slopes/intercepts that differ per slice (PET) cannot share one `values.scale` |
 | `vector_frame` | `from_file`, `lps`, `ras`, `error` | `from_file`, else `error` | ITK writes LPS and NiftyReg RAS under the same intent (ch03 §8) |
 | `on_loss` | `warn`, `error` | `warn` | |
 | `layout` (output encoding) | `source` (reuse the original encoding/compression/transfer syntax), `default` | `source` | |
@@ -265,6 +267,16 @@ medvol inspect INPUT                    # prints axes, spaces, values, warnings
 | pyramids | not read or written in v2 (MLArray reserves level geometry only) |
 | de-identification | never; metadata is converted as is |
 | default output world frame | DICOM patient (LPS) |
+| cross-format fields | never copied between formats; fields the target cannot represent are reported and dropped (2026-11-06) |
+| shear on write | exact where the format stores it (NIfTI sform, NRRD, MGH `Mdc` columns, DICOM positions); MetaImage gets the closest orthonormal direction, reported (ITK expects orthonormal directions) (2026-11-06) |
+| NRRD `space dimension` without `space` | a non-patient space named `nrrd`; not assumed LPS (2026-11-06) |
+| NRRD `scanner-xyz`, `3D-right/left-handed` | read as LPS like ITK and Slicer, with a warning (2026-11-06) |
+| NIfTI time series to NRRD | `left-posterior-superior-time` space, the only 4-D space ITK reads correctly (2026-11-06) |
+| fractional DICOM SEG | `values.kind: probability`, `label_layout: channel`, stored values with `scale = 1/MaximumFractionalValue` (2026-11-06) |
+| MGH `goodRASFlag` <= 0 | read as FreeSurfer does for 0 (coronal LIA, 1 mm) (2026-11-06) |
+| `layout` policy | changes only the output encoding; same-format verbatim fields are always kept (2026-11-06) |
+| `reorient` | lossless transpose and flip so the space axes, fastest first, follow x, y, z of LPS or RAS; axis names travel with their axes (2026-11-06) |
+| Siemens mosaic (phase 5) | needs the dcm2niix backend; not implemented while dcm2niix is unavailable (2026-11-06) |
 
 ## 11. Open questions
 
