@@ -135,6 +135,19 @@ to the report.
   NRRD `centerings: cell` with old-style `axis mins`, are converted explicitly.
 - No backend library's geometry interpretation is trusted blindly. Backends are used for byte-level IO, and
   MedVol computes geometry itself from the raw fields, following the specs and the KB findings.
+- Geometry values are never rounded or "snapped". MedVol v1's `snap_values` rounded affines to 6 decimals.
+- Non-space axes (channel, vector component, time) never enter a space matrix. Readers check that the
+  format's geometry separates spatial and non-spatial axes; a matrix that couples them is repaired with a
+  report, or rejected. This was review finding H12: MedVol v1's pynrrd path left a stray 1 for the vector
+  axis.
+- **Per-axis header fields follow their axis.**
+  - Any header field with one entry per axis (NRRD `kinds`, `labels`, `units`, `thicknesses`, `centerings`;
+    NIfTI `dim`/`pixdim`; MetaImage `ElementSpacing`) is core-owned, or it is permuted and flipped together
+    with `index_map` whenever axes are reordered.
+  - It is never copied stale (review finding M16).
+- **`source` headers are only used when writing the same format.** NIfTI → `.mla` → NRRD writes NRRD fields
+  from the core and maps only the fields with an explicit cross-format meaning. It never copies NIfTI
+  fields into NRRD custom keys (review finding M18).
 
 ## 7. Formats
 
