@@ -396,7 +396,7 @@ class MetaImagePlugin(FormatPlugin):
 
     # -- write -------------------------------------------------------------------------------
 
-    def write(self, image: Image, path: PathLike, policy: Policy) -> Report:
+    def write(self, image: Image, path: PathLike, policy: Policy, **options) -> Report:
         report = Report("write", self.name, str(path))
         meta = image.meta
         path = str(path)

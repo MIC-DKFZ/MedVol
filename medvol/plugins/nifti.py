@@ -238,7 +238,7 @@ class NiftiPlugin(FormatPlugin):
 
     # -- write -------------------------------------------------------------------------------
 
-    def write(self, image: Image, path: PathLike, policy: Policy) -> Report:
+    def write(self, image: Image, path: PathLike, policy: Policy, **options) -> Report:
         nib = _nib()
         report = Report("write", self.name, str(path))
         meta = image.meta

@@ -582,7 +582,7 @@ class NrrdPlugin(FormatPlugin):
 
     # -- write -------------------------------------------------------------------------------
 
-    def write(self, image: Image, path: PathLike, policy: Policy) -> Report:
+    def write(self, image: Image, path: PathLike, policy: Policy, **options) -> Report:
         path = str(path)
         report = Report("write", self.name, path)
         meta = image.meta

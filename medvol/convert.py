@@ -68,13 +68,18 @@ def check_capabilities(image: Image, capabilities: Capabilities, report: Report,
             report.drop(f"profiles.{name}", "the format has no place for profile metadata", policy.on_loss)
 
 
-def write(image: Image, path: PathLike, format: Optional[str] = None, policy: Optional[Policy] = None, **options) -> Report:
-    """Write ``image`` to ``path``; the format comes from ``format`` or the extension."""
+def write(image: Image, path: PathLike, format: Optional[str] = None, policy: Optional[Policy] = None,
+          reference=None, **options) -> Report:
+    """Write ``image`` to ``path``; the format comes from ``format`` or the extension.
+
+    ``reference``: for a DICOM SEG, the referenced image series (directory, files or datasets).
+    """
     policy = Policy.from_options(policy, **options)
     plugin = registry.for_writing(path, format)
     report = Report("write", plugin.name, str(path))
     check_capabilities(image, plugin.capabilities, report, policy)
-    report.extend(plugin.write(image, path, policy))
+    extra = {"reference": reference} if reference is not None else {}
+    report.extend(plugin.write(image, path, policy, **extra))
     return report
 
 

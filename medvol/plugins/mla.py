@@ -32,6 +32,6 @@ class MlaPlugin(FormatPlugin):
     def read(self, path: PathLike, policy: Policy) -> Tuple[List[Image], Report]:
         return [Image.from_mlarray(MLArray(path))], Report("read", self.name, str(path))
 
-    def write(self, image: Image, path: PathLike, policy: Policy) -> Report:
+    def write(self, image: Image, path: PathLike, policy: Policy, **options) -> Report:
         image.to_mlarray().save(path)
         return Report("write", self.name, str(path))

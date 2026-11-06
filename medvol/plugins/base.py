@@ -66,5 +66,5 @@ class FormatPlugin(ABC):
         """All images in ``path`` (DICOM can hold several stacks) and the report."""
 
     @abstractmethod
-    def write(self, image: Image, path: PathLike, policy: Policy) -> Report:
-        """Write ``image`` to ``path``."""
+    def write(self, image: Image, path: PathLike, policy: Policy, **options) -> Report:
+        """Write ``image`` to ``path``; ``options`` are format-specific (e.g. DICOM SEG ``reference``)."""
