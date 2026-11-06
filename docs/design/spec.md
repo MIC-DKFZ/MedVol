@@ -241,10 +241,17 @@ medvol inspect INPUT                    # prints axes, spaces, values, warnings
 4. **Library-bug regressions:** NRRD LAS, NIfTI qform/sform precedence, nibabel MGH `goodRASFlag`, vector
    intent frames, SEG frame order.
 
-## 10. Open questions
+## 10. Decisions log
 
-1. DICOM writing scope (§7.6): is re-emitting original series plus SEG enough for v2?
-2. Do we need a lazy or streaming `Image.array` (whole-slide images, very large series) in v2, or is
-   in-memory enough initially?
-3. Non-medical plugins (TIFF/OME-TIFF, FITS, GeoTIFF): inside MedVol later, or separate packages from the
-   start?
+| topic | decision |
+|---|---|
+| DICOM writing | re-emit original series from `source` (original UIDs) + create DICOM SEG from label maps; no new image series from non-DICOM sources |
+| very large inputs | in-memory `Image.array` only in v2; lazy/streaming IO (whole-slide images, huge series) is a later version |
+| non-medical formats | later; the MLArray model already covers their metadata (MLArray spec §5.3), so they can be added as plugins without model changes |
+| pyramids | not read or written in v2 (MLArray reserves level geometry only) |
+| de-identification | never; metadata is converted as is |
+| default output world frame | DICOM patient (LPS) |
+
+## 11. Open questions
+
+None at the moment.
