@@ -11,6 +11,7 @@ BUILTIN = {
     "nifti": "medvol.plugins.nifti:NiftiPlugin",
     "dicom": "medvol.plugins.dicom:DicomPlugin",
     "mgh": "medvol.plugins.mgh:MghPlugin",
+    "metaimage": "medvol.plugins.metaimage:MetaImagePlugin",
 }
 
 _plugins: Dict[str, FormatPlugin] = {}
