@@ -22,6 +22,10 @@ def read_all(path: PathLike, format: Optional[str] = None, policy: Optional[Poli
     policy = Policy.from_options(policy, **options)
     plugin = registry.for_reading(path, format)
     images, report = plugin.read(path, policy)
+    if policy.reorient != "none":
+        from medvol.reorient import reorient
+
+        images = [reorient(image, policy.reorient, report) for image in images]
     if plugin.name != "mla":
         for image in images:
             image.meta.add_history(**report.history_entry(_tool()))
