@@ -5,7 +5,6 @@
 [![Build status](https://img.shields.io/github/actions/workflow/status/MIC-DKFZ/MedVol/test_and_deploy.yml?branch=main)](https://github.com/MIC-DKFZ/MedVol/actions)
 [![License](https://img.shields.io/github/license/MIC-DKFZ/MedVol)](https://github.com/MIC-DKFZ/MedVol/blob/main/LICENSE)
 
-A lightweight Python wrapper that unifies **SimpleITK**, **nibabel**, and **pynrrd** under a single, simple API for reading and writing 2‑D, 3‑D, and 4‑D medical images in NIfTI (`.nii/.nii.gz`) and NRRD (`.nrrd`) formats.
 Faithful N:N conversion of medical image formats through one neutral model: the
 [MLArray v1](https://github.com/MIC-DKFZ/mlarray) metadata model. Formats: NIfTI-1/2, NRRD, MetaImage, MGH/MGZ,
 DICOM (single-frame and enhanced multi-frame series, SEG) and `.mla`.
