@@ -1,0 +1,2106 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Faithful conversion of medical image formats through the MLArray v1 model">
+      
+      
+      
+        <link rel="canonical" href="https://mic-dkfz.github.io/MedVol/api/">
+      
+      
+        <link rel="prev" href="../plugins/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>API - MedVol</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#api-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="MedVol" class="md-header__button md-logo" aria-label="MedVol" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            MedVol
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              API
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/MIC-DKFZ/MedVol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MIC-DKFZ/MedVol
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="MedVol" class="md-nav__button md-logo" aria-label="MedVol" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    MedVol
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/MIC-DKFZ/MedVol" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    MIC-DKFZ/MedVol
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../geometry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Geometry and metadata
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reports
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Writing a plugin
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#reading-writing-converting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading, writing, converting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.read_all" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_all
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.convert.convert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        convert
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.inspect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        inspect
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.reorient.reorient" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        reorient
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.check_capabilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        check_capabilities
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#image-policy-and-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image, policy and report
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.Image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Image">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#medvol.Image.to_mlarray" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_mlarray
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.Policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Policy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Policy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#medvol.Policy.from_options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.Report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Report
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Report">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#medvol.Report.choose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        choose
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medvol.Report.drop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        drop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medvol.Report.history_entry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        history_entry
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.LossError" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LossError
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugins
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.plugins.base.FormatPlugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FormatPlugin
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="FormatPlugin">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#medvol.plugins.base.FormatPlugin.read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medvol.plugins.base.FormatPlugin.sniff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sniff
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medvol.plugins.base.FormatPlugin.write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.plugins.base.Capabilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Capabilities
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.plugins.base.FieldTable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FieldTable
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.registry.plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plugins
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.registry.register" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.registry.get" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dicom-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DICOM helpers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.plugins.dicom_seg.write_seg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write_seg
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.plugins.dicom_rtstruct.read_rtstruct" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_rtstruct
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#reading-writing-converting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading, writing, converting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.read_all" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_all
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.convert.convert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        convert
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.inspect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        inspect
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.reorient.reorient" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        reorient
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.check_capabilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        check_capabilities
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#image-policy-and-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image, policy and report
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.Image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Image">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#medvol.Image.to_mlarray" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_mlarray
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.Policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Policy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Policy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#medvol.Policy.from_options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.Report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Report
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Report">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#medvol.Report.choose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        choose
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medvol.Report.drop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        drop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medvol.Report.history_entry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        history_entry
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.LossError" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LossError
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugins
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.plugins.base.FormatPlugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FormatPlugin
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="FormatPlugin">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#medvol.plugins.base.FormatPlugin.read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medvol.plugins.base.FormatPlugin.sniff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sniff
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medvol.plugins.base.FormatPlugin.write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.plugins.base.Capabilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Capabilities
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.plugins.base.FieldTable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FieldTable
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.registry.plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        plugins
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.registry.register" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.registry.get" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dicom-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DICOM helpers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.plugins.dicom_seg.write_seg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write_seg
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medvol.plugins.dicom_rtstruct.read_rtstruct" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_rtstruct
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h1>
+<h2 id="reading-writing-converting">Reading, writing, converting<a class="headerlink" href="#reading-writing-converting" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="medvol.read" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">medvol.read</span>
+
+
+<a href="#medvol.read" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">read</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="n">PathLike</span><span class="p">,</span> <span class="nb">format</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Policy</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">reference</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">options</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Image</span><span class="p">,</span> <span class="n">Report</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>The image in <code>path</code> and the report. Raises if <code>path</code> holds several images (use <code>read_all</code>).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="medvol.read_all" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">medvol.read_all</span>
+
+
+<a href="#medvol.read_all" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">read_all</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="n">PathLike</span><span class="p">,</span> <span class="nb">format</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Policy</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">reference</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">options</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Image</span><span class="p">],</span> <span class="n">Report</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Every image in <code>path</code> (a DICOM directory can hold several stacks) and the report.</p>
+<p><code>reference</code>: for a DICOM RTSTRUCT, the referenced image series it is rasterised onto.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="medvol.write" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">medvol.write</span>
+
+
+<a href="#medvol.write" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">write</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">Image</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">PathLike</span><span class="p">,</span> <span class="nb">format</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Policy</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">reference</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">options</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Report</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Write <code>image</code> to <code>path</code>; the format comes from <code>format</code> or the extension.</p>
+<p><code>reference</code>: for a DICOM SEG, the referenced image series (directory, files or datasets).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="medvol.convert.convert" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">medvol.convert.convert</span>
+
+
+<a href="#medvol.convert.convert" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">convert</span><span class="p">(</span><span class="n">source</span><span class="p">:</span> <span class="n">PathLike</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="n">PathLike</span><span class="p">,</span> <span class="n">source_format</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">target_format</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Policy</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">options</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Report</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Read <code>source</code> and write it to <code>target</code>; the report covers both steps.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="medvol.inspect" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">medvol.inspect</span>
+
+
+<a href="#medvol.inspect" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">inspect</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="n">PathLike</span><span class="p">,</span> <span class="nb">format</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Policy</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">options</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>A summary of the image(s) in <code>path</code> in the MLArray vocabulary.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="medvol.reorient.reorient" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">medvol.reorient.reorient</span>
+
+
+<a href="#medvol.reorient.reorient" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">reorient</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">Image</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">report</span><span class="p">:</span> <span class="n">Report</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Image</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p><code>image</code> reoriented to the closest <code>"LPS"</code> or <code>"RAS"</code> layout (a new Image).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="medvol.check_capabilities" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">medvol.check_capabilities</span>
+
+
+<a href="#medvol.check_capabilities" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">check_capabilities</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">Image</span><span class="p">,</span> <span class="n">capabilities</span><span class="p">:</span> <span class="n">Capabilities</span><span class="p">,</span> <span class="n">report</span><span class="p">:</span> <span class="n">Report</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">Policy</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Report (or raise for, with <code>on_loss='error'</code>) what the target format cannot represent.</p>
+
+
+    </div>
+
+</div><h2 id="image-policy-and-report">Image, policy and report<a class="headerlink" href="#image-policy-and-report" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="medvol.Image" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">medvol.Image</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#medvol.Image" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">Image</span><span class="p">(</span><span class="n">array</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">meta</span><span class="p">:</span> <span class="n">Meta</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Stored values in their original dtype, in the array order <code>meta.axes</code> describes, plus metadata.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="medvol.Image.to_mlarray" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">to_mlarray</span>
+
+
+<a href="#medvol.Image.to_mlarray" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">to_mlarray</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MLArray</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>An in-memory MLArray of this image (layout options as for <code>MLArray</code>).</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="medvol.Policy" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">medvol.Policy</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#medvol.Policy" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">Policy</span><span class="p">(</span><span class="n">nifti_form</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'nibabel'</span><span class="p">,</span> <span class="n">nifti_form_disagreement</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'warn'</span><span class="p">,</span> <span class="n">nifti_form_tolerance_mm</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.001</span><span class="p">,</span> <span class="n">nifti_no_codes</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'error'</span><span class="p">,</span> <span class="n">reorient</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'none'</span><span class="p">,</span> <span class="n">world_frame</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'dicom_patient'</span><span class="p">,</span> <span class="n">dicom_tilt</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'exact'</span><span class="p">,</span> <span class="n">dicom_irregular_spacing</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'error'</span><span class="p">,</span> <span class="n">dicom_stacks</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'split'</span><span class="p">,</span> <span class="n">dicom_rescale</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'error'</span><span class="p">,</span> <span class="n">vector_frame</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'from_file'</span><span class="p">,</span> <span class="n">on_loss</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'warn'</span><span class="p">,</span> <span class="n">layout</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'source'</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Options of read, write and convert; the first option of each is the default.</p>
+<p><code>nifti_form_tolerance_mm</code> is the distance (in mm, over the image corners)
+above which qform and sform count as disagreeing.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="medvol.Policy.from_options" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">from_options</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#medvol.Policy.from_options" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">from_options</span><span class="p">(</span><span class="n">policy</span><span class="p">:</span> <span class="n">Policy</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">options</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Policy</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>A policy from keyword options, optionally on top of an existing policy.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="medvol.Report" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">medvol.Report</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#medvol.Report" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">Report</span><span class="p">(</span><span class="n">operation</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">format</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">choices</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(),</span> <span class="n">warnings</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(),</span> <span class="n">dropped</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">())</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="medvol.Report.choose" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">choose</span>
+
+
+<a href="#medvol.Report.choose" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">choose</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Record a choice made by a policy or by the data.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="medvol.Report.drop" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">drop</span>
+
+
+<a href="#medvol.Report.drop" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">drop</span><span class="p">(</span><span class="n">what</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">reason</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">on_loss</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">'warn'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Record something the target cannot represent; raise if <code>on_loss</code> is <code>error</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="medvol.Report.history_entry" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">history_entry</span>
+
+
+<a href="#medvol.Report.history_entry" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">history_entry</span><span class="p">(</span><span class="n">tool</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The entry this report adds to an image's history.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="medvol.LossError" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">medvol.LossError</span>
+
+
+<a href="#medvol.LossError" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="ValueError">ValueError</span></code></p>
+
+
+
+        <p>Something cannot be represented in the target format and policy <code>on_loss</code> is <code>error</code>.</p>
+
+
+
+
+
+
+
+
+
+    </div>
+
+</div><h2 id="plugins">Plugins<a class="headerlink" href="#plugins" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="medvol.plugins.base.FormatPlugin" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">medvol.plugins.base.FormatPlugin</span>
+
+
+<a href="#medvol.plugins.base.FormatPlugin" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="abc.ABC">ABC</span></code></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="medvol.plugins.base.FormatPlugin.read" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">read</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-abstractmethod"><code>abstractmethod</code></small>
+  </span>
+
+<a href="#medvol.plugins.base.FormatPlugin.read" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">read</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="n">PathLike</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">Policy</span><span class="p">,</span> <span class="o">**</span><span class="n">options</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Image</span><span class="p">],</span> <span class="n">Report</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>All images in <code>path</code> (DICOM can hold several stacks) and the report.</p>
+<p><code>options</code> are format-specific (e.g. the <code>reference</code> series of a DICOM RTSTRUCT).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="medvol.plugins.base.FormatPlugin.sniff" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">sniff</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-abstractmethod"><code>abstractmethod</code></small>
+  </span>
+
+<a href="#medvol.plugins.base.FormatPlugin.sniff" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">sniff</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="n">PathLike</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Confidence 0..1 that <code>path</code> is in this format, from its content where possible.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="medvol.plugins.base.FormatPlugin.write" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">write</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-abstractmethod"><code>abstractmethod</code></small>
+  </span>
+
+<a href="#medvol.plugins.base.FormatPlugin.write" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">write</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">Image</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">PathLike</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">Policy</span><span class="p">,</span> <span class="o">**</span><span class="n">options</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Report</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Write <code>image</code> to <code>path</code>; <code>options</code> are format-specific (e.g. DICOM SEG <code>reference</code>).</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="medvol.plugins.base.Capabilities" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">medvol.plugins.base.Capabilities</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#medvol.plugins.base.Capabilities" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">Capabilities</span><span class="p">(</span><span class="n">max_space_axes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="n">min_space_axes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">non_space_axes</span><span class="p">:</span> <span class="n">FrozenSet</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(),</span> <span class="n">max_ndim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">7</span><span class="p">,</span> <span class="n">oblique</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">shear</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">label_table</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">key_value</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">dtypes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FrozenSet</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>What a writer can represent; anything else is reported and dropped, or raises (<code>on_loss</code>).</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="medvol.plugins.base.FieldTable" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">medvol.plugins.base.FieldTable</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#medvol.plugins.base.FieldTable" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">FieldTable</span><span class="p">(</span><span class="n">core_owned</span><span class="p">:</span> <span class="n">FrozenSet</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(),</span> <span class="n">data_dependent</span><span class="p">:</span> <span class="n">FrozenSet</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">())</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Ownership of a format's header fields (spec section 4).</p>
+<ul>
+<li>core-owned: always regenerated from the MLArray core on export;</li>
+<li>data-dependent: kept while the source fingerprint matches, else recomputed or dropped;</li>
+<li>everything else: verbatim.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="medvol.registry.plugins" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">medvol.registry.plugins</span>
+
+
+<a href="#medvol.registry.plugins" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">plugins</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FormatPlugin</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>All registered plugins by name (loaded once).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="medvol.registry.register" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">medvol.registry.register</span>
+
+
+<a href="#medvol.registry.register" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">register</span><span class="p">(</span><span class="n">plugin</span><span class="p">:</span> <span class="n">FormatPlugin</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Register a plugin at runtime (replaces a plugin of the same name).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="medvol.registry.get" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">medvol.registry.get</span>
+
+
+<a href="#medvol.registry.get" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">get</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FormatPlugin</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+
+    </div>
+
+</div><h2 id="dicom-helpers">DICOM helpers<a class="headerlink" href="#dicom-helpers" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="medvol.plugins.dicom_seg.write_seg" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">medvol.plugins.dicom_seg.write_seg</span>
+
+
+<a href="#medvol.plugins.dicom_seg.write_seg" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">write_seg</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">Image</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">Policy</span><span class="p">,</span> <span class="n">reference</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Report</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>A DICOM SEG of the label map <code>image</code> on the referenced series (spec 7.6).</p>
+<p><code>reference</code> (or <code>medvol.write(..., reference=...)</code>): the referenced image series as a directory, a list
+of files or of pydicom datasets. <code>path</code> is the output file (<code>*.dcm</code>) or a directory.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="medvol.plugins.dicom_rtstruct.read_rtstruct" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">medvol.plugins.dicom_rtstruct.read_rtstruct</span>
+
+
+<a href="#medvol.plugins.dicom_rtstruct.read_rtstruct" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">read_rtstruct</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="n">PathLike</span><span class="p">,</span> <span class="n">reference</span><span class="p">:</span> <span class="n">PathLike</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">Policy</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Image</span><span class="p">],</span> <span class="n">Report</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>The label map of every RTSTRUCT in <code>path</code>, rasterised onto the image series <code>reference</code>.</p>
+<p><code>reference</code> is read with the same policy (a directory or file(s) that <code>medvol</code> reads as
+DICOM); RTSTRUCTs in it are ignored. Returns (images, report).</p>
+
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.copy", "navigation.sections"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>
