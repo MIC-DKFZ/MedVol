@@ -6,77 +6,51 @@
 [![License](https://img.shields.io/github/license/MIC-DKFZ/MedVol)](https://github.com/MIC-DKFZ/MedVol/blob/main/LICENSE)
 
 A lightweight Python wrapper that unifies **SimpleITK**, **nibabel**, and **pynrrd** under a single, simple API for reading and writing 2‑D, 3‑D, and 4‑D medical images in NIfTI (`.nii/.nii.gz`) and NRRD (`.nrrd`) formats.
+Faithful N:N conversion of medical image formats through one neutral model: the
+[MLArray v1](https://github.com/MIC-DKFZ/mlarray) metadata model. Formats: NIfTI-1/2, NRRD, MetaImage, MGH/MGZ,
+DICOM (single-frame and enhanced multi-frame series, SEG) and `.mla`.
 
+**Status:** MedVol 2 is in development (branch `rework/v2`). Design: [`docs/design/spec.md`](docs/design/spec.md).
 
-## ✨ Features
+## Guarantees
 
-- **Unified API** – one `MedVol` class works with all three back‑ends.
-- **Automatic backend selection** based on file extension:
-  - `.nii/.nii.gz` → `nibabel`
-  - `.nrrd` → `pynrrd`
-- **Explicit backend override** via the `backend=` argument.
-- **Canonical `RAS+` orientation** by default (no interpolation).
-- Optional **de‑obliquing** via `get_geometry(deoblique=True)`.
-- Geometry is stored in a single source of truth – the affine matrix.
-- Convenient derived properties: `spacing`, `origin`, `direction`, `rotation`, `shear`, `coordinate_system`.
-- Direct access to the raw backend header through `header`.
+- **Faithful round trips.** X → `.mla` → X reproduces the array bit-identically and the header to the accuracy of
+  the format (identical binary floats, identical numeric values for text formats).
+- **Nothing implicit.** No reorientation, resampling, rescaling or dtype change, and no metadata removal. The array
+  keeps its stored values and order; scaling becomes `values.scale`/`offset`.
+- **Exact geometry.** MedVol computes geometry from the format's own fields (backends do byte-level IO only). Every
+  voxel keeps its world position across formats, including oblique, mirrored and gantry-tilted (sheared) grids.
+- **Everything reported.** Each read, write and convert returns a report of choices, warnings and dropped fields; it
+  is also stored in the image's history.
 
+## Usage
 
-## 📦 Installation
+```python
+import medvol
+
+image, report = medvol.read("ct.nii.gz")              # Image(array, mlarray Meta) + Report
+print(report)
+medvol.write(image, "ct.mla")
+medvol.convert("dicom_dir/", "ct.mla", dicom_tilt="exact")
+medvol.convert("ct.mla", "out_dir/", target_format="dicom")   # re-emits the original series
+print(medvol.inspect("scan.nrrd"))
+```
+
+Ambiguities are resolved by explicit policies (`medvol.Policy`), for example `nifti_form` when qform and sform
+disagree, `world_frame` (`dicom_patient` = LPS by default, or `ras`), `dicom_stacks`, `dicom_tilt`,
+`dicom_irregular_spacing` and `on_loss` (`warn` or `error` when the target cannot represent something).
+
+The original header is kept, readable, in `image.meta.source`, and is used again only when writing the same format.
+
+## Installation
 
 ```bash
-pip install medvol
+pip install medvol            # NIfTI, NRRD, MetaImage, MGH/MGZ, .mla
+pip install "medvol[dicom]"   # plus DICOM (pydicom, highdicom)
 ```
 
+Plugins for further formats can be added through the `medvol.formats` entry point group.
 
-## 🚀 Quick start
+## License
 
-```python
-from medvol import MedVol
-
-# Load the bundled 3‑D example image (NIfTI).
-img = MedVol("examples/data/3d_img.nii.gz")
-
-print("Backend:", img.backend)
-print("Shape:", img.array.shape)
-print("Coordinate system:", img.coordinate_system)
-print("Spacing:", img.spacing)
-print("Origin:", img.origin)
-print("Direction:\n", img.direction)
-print("Affine:\n", img.affine)
-print("Rotation:\n", img.rotation)
-print("Header type:", type(img.header).__name__)
-
-# Access the centre voxel value.
-center = tuple(s // 2 for s in img.array.shape)
-print("Center voxel:", img.array[center])
-```
-
-To inspect the native geometry without canonicalisation:
-
-```python
-native = MedVol(
-    "examples/data/3d_img.nii.gz",
-    backend="simpleitk",
-    canonicalize=False,
-)
-print("Native coordinate system:", native.coordinate_system)
-```
-
-See the runnable demo at `examples/example_showcase_3d_nifti.py`.
-
-
-## Contributing
-
-Contributions are welcome! Please open a pull request with clear changes and add tests when appropriate.
-
-## Acknowledgments
-
-<p align="left">
-  <img src="https://github.com/MIC-DKFZ/vidata/raw/main/imgs/Logos/HI_Logo.png" width="150"> &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://github.com/MIC-DKFZ/vidata/raw/main/imgs/Logos/DKFZ_Logo.png" width="500">
-</p>
-
-This repository is developed and maintained by the Applied Computer Vision Lab (ACVL)
-of [Helmholtz Imaging](https://www.helmholtz-imaging.de/) and the
-[Division of Medical Image Computing](https://www.dkfz.de/en/medical-image-computing) at DKFZ.
+Apache-2.0
