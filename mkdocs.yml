@@ -1,0 +1,48 @@
+site_name: MedVol
+site_description: Faithful conversion of medical image formats through the MLArray v1 model
+site_url: https://mic-dkfz.github.io/MedVol/
+repo_url: https://github.com/MIC-DKFZ/MedVol
+repo_name: MIC-DKFZ/MedVol
+
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - navigation.sections
+
+nav:
+  - Home: index.md
+  - Usage: usage.md
+  - Formats: formats.md
+  - Policies: policies.md
+  - Geometry and metadata: geometry.md
+  - Reports: reports.md
+  - CLI: cli.md
+  - Writing a plugin: plugins.md
+  - API: api.md
+
+exclude_docs: |
+  design/
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+
+plugins:
+  - search
+  - include-markdown
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_root_heading: true
+            show_source: false
+            show_signature_annotations: true
+            separate_signature: true
+            merge_init_into_class: true
+            filters:
+              - "!^_"

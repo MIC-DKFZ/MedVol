@@ -1,15 +1,18 @@
 # MedVol
 
-[![PyPI version](https://img.shields.io/pypi/v/medvol)](https://pypi.org/project/medvol/)
-[![Python versions](https://img.shields.io/pypi/pyversions/medvol)](https://pypi.org/project/medvol/)
-[![Build status](https://img.shields.io/github/actions/workflow/status/MIC-DKFZ/MedVol/test_and_deploy.yml?branch=main)](https://github.com/MIC-DKFZ/MedVol/actions)
-[![License](https://img.shields.io/github/license/MIC-DKFZ/MedVol)](https://github.com/MIC-DKFZ/MedVol/blob/main/LICENSE)
+<p align="center">
+  <a href="https://pypi.org/project/medvol/"><img src="https://img.shields.io/pypi/v/medvol?logo=pypi&color=brightgreen" alt="PyPI" align="middle" /></a>
+  <a href="https://pypi.org/project/medvol/"><img src="https://img.shields.io/pypi/pyversions/medvol?logo=python" alt="Python Version" align="middle" /></a>
+  <a href="https://github.com/MIC-DKFZ/MedVol/actions"><img src="https://img.shields.io/github/actions/workflow/status/MIC-DKFZ/MedVol/test_and_deploy.yml?branch=main&logo=github" alt="Tests" align="middle" /></a>
+  <a href="https://mic-dkfz.github.io/MedVol/"><img src="https://img.shields.io/badge/docs-medvol-blue?logo=readthedocs&logoColor=white" alt="Docs" align="middle" /></a>
+  <a href="https://github.com/MIC-DKFZ/MedVol/blob/main/LICENSE"><img src="https://img.shields.io/github/license/MIC-DKFZ/MedVol" alt="License" align="middle" /></a>
+</p>
 
 Faithful N:N conversion of medical image formats through one neutral model: the
 [MLArray v1](https://github.com/MIC-DKFZ/mlarray) metadata model. Formats: NIfTI-1/2, NRRD, MetaImage, MGH/MGZ,
 DICOM (single-frame and enhanced multi-frame series, SEG) and `.mla`.
 
-Design: [`docs/design/spec.md`](docs/design/spec.md).
+Documentation: [mic-dkfz.github.io/MedVol](https://mic-dkfz.github.io/MedVol/). Design: [`docs/design/spec.md`](https://github.com/MIC-DKFZ/MedVol/blob/main/docs/design/spec.md).
 
 ## Guarantees
 
@@ -33,6 +36,11 @@ medvol.write(image, "ct.mla")
 medvol.convert("dicom_dir/", "ct.mla", dicom_tilt="exact")
 medvol.convert("ct.mla", "out_dir/", target_format="dicom")   # re-emits the original series
 print(medvol.inspect("scan.nrrd"))
+```
+
+```bash
+medvol convert ct.nii.gz ct.mla --nifti-form sform
+medvol inspect dicom_dir/
 ```
 
 Ambiguities are resolved by explicit policies (`medvol.Policy`), for example `nifti_form` when qform and sform

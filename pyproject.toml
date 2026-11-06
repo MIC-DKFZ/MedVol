@@ -31,6 +31,11 @@ dependencies = [
 [project.optional-dependencies]
 dicom = ["pydicom>=3.0", "highdicom>=0.28"]
 dev = ["pytest>=7", "pydicom>=3.0", "highdicom>=0.28"]
+docs = [
+  "mkdocs-material>=9.5",
+  "mkdocs-include-markdown-plugin>=6.0",
+  "mkdocstrings[python]>=0.25",
+]
 
 [project.scripts]
 medvol = "medvol.cli:main"
@@ -45,6 +50,7 @@ nrrd = "medvol.plugins.nrrd:NrrdPlugin"
 
 [project.urls]
 Homepage = "https://github.com/MIC-DKFZ/MedVol"
+Documentation = "https://mic-dkfz.github.io/MedVol/"
 
 [tool.setuptools.dynamic]
 version = { attr = "medvol.__version__" }
