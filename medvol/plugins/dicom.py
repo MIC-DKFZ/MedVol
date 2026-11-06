@@ -322,4 +322,7 @@ class DicomPlugin(FormatPlugin):
         return values
 
     def write(self, image: Image, path: PathLike, policy: Policy) -> Report:
-        raise NotImplementedError("DICOM writing (spec 7.6) is not implemented yet")
+        """Re-emit the original series into the directory ``path`` (spec 7.6)."""
+        from medvol.plugins.dicom_write import write_series
+
+        return write_series(image, str(path), policy)

@@ -1,3 +1,4 @@
+import shutil
 import tempfile
 import unittest
 import warnings
@@ -136,6 +137,79 @@ class TestAssemblyPolicies(DicomCase):
         self.assertEqual(image.array.shape, (1, 6, 5))
         self.assertAlmostEqual(image.space().spacing[0], 1.5, places=9)
         self.assertIn("single slice", report.warnings[0])
+
+
+def _load(directory):
+    return {p.relative_to(directory).as_posix(): pydicom.dcmread(p) for p in sorted(Path(directory).rglob("*.dcm"))}
+
+
+def _differences(a, b):
+    diffs = [e.keyword or str(e.tag) for e in a if e.tag != 0x7FE00010 and (e.tag not in b or b[e.tag].value != e.value or b[e.tag].VR != e.VR)]
+    diffs += [e.keyword or str(e.tag) for e in b if e.tag not in a]
+    diffs += ["file_meta." + (e.keyword or str(e.tag)) for e in a.file_meta if e.tag not in b.file_meta or b.file_meta[e.tag].value != e.value]
+    return diffs
+
+
+class TestWrite(DicomCase):
+    def round_trip(self, directory, **options):
+        image, _ = medvol.read(directory, **options)
+        medvol.write(image, self.dir / "x.mla")
+        again, _ = medvol.read(self.dir / "x.mla")
+        out = self.dir / "out"
+        report = medvol.write(again, out, format="dicom")
+        return out, report
+
+    def test_series_round_trip_reemits_every_file_exactly(self):
+        for name, kwargs in (("regular", {}), ("tilted", {"truth": _truth(sheared=True)}),
+                             ("rescaled", {"extra": {"RescaleSlope": 2, "RescaleIntercept": -1024}})):
+            with self.subTest(series=name):
+                directory = self.series(name, **kwargs)
+                out, report = self.round_trip(directory)
+                original, written = _load(directory), _load(out)
+                self.assertEqual(sorted(original), sorted(written))
+                for file in original:
+                    self.assertEqual(_differences(original[file], written[file]), [], file)
+                    np.testing.assert_array_equal(original[file].pixel_array, written[file].pixel_array)
+                self.assertEqual(report.warnings, [])
+                shutil.rmtree(out)
+
+    def test_rle_lossless_is_kept(self):
+        directory = self.series()
+        for path in directory.iterdir():
+            ds = pydicom.dcmread(path)
+            ds.compress(pydicom.uid.RLELossless)
+            ds.save_as(path, enforce_file_format=True)
+        out, _ = self.round_trip(directory)
+        for ds in _load(out).values():
+            self.assertEqual(ds.file_meta.TransferSyntaxUID, pydicom.uid.RLELossless)
+
+    def test_changed_geometry_is_regenerated(self):
+        truth = _truth()
+        image, _ = medvol.read(self.series(truth=truth))
+        moved = image.space().matrix()
+        moved[:3, -1] += [1.0, 2.0, 3.0]
+        image.meta.spaces = [dict(image.space().to_dict(), from_array={"array_axes": ["z", "y", "x"], "matrix": moved.tolist()})]
+        out = self.dir / "out"
+        report = medvol.write(image, out, format="dicom")
+        self.assertEqual(report.choices["geometry"], "regenerated from the core")
+        again, _ = medvol.read(out)
+        np.testing.assert_allclose(again.space().matrix(), moved, atol=1e-6)
+
+    def test_changed_data_gets_new_instance_uids(self):
+        directory = self.series()
+        image, _ = medvol.read(directory)
+        image.array[0, 0, 0] += 1
+        out = self.dir / "out"
+        report = medvol.write(image, out, format="dicom")
+        self.assertTrue(any("new SOP Instance UIDs" in w for w in report.warnings))
+        original = {ds.InstanceNumber: ds.SOPInstanceUID for ds in _load(directory).values()}
+        written = {ds.InstanceNumber: ds.SOPInstanceUID for ds in _load(out).values()}
+        self.assertTrue(all(original[n] != written[n] for n in original))
+
+    def test_only_dicom_sources_are_written_as_dicom(self):
+        nifti, _ = medvol.read(phantom.write_nifti(self.dir / "a.nii.gz"))
+        with self.assertRaises(NotImplementedError):
+            medvol.write(nifti, self.dir / "out", format="dicom")
 
 
 if __name__ == "__main__":
