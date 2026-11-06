@@ -1,6 +1,8 @@
 """DICOM plugin (spec sections 7.5 and 7.6).
 
-Reading, phase 1: single-frame series (CT, MR, PET, ...), regular or gantry-tilted.
+Reading, phase 1: single-frame series (CT, MR, PET, ...), regular or gantry-tilted. Phase 2
+(enhanced multi-frame, ``dicom_enhanced.py``) and phase 3 (DICOM SEG, ``dicom_seg.py``) are
+dispatched from ``DicomPlugin.read`` and ``DicomPlugin.write``.
 
 - pydicom parses files and decodes pixels; MedVol assembles the series and builds the geometry itself.
 - Files are grouped by SeriesInstanceUID, then by in-plane geometry (``dicom_stacks``), sorted by the
@@ -236,8 +238,10 @@ class DicomPlugin(FormatPlugin):
     name = "dicom"
     extensions = (".dcm",)
     capabilities = Capabilities(
-        max_space_axes=3, min_space_axes=2, max_ndim=3, shear=True, oblique=True,
-        label_table=False, key_value=False,
+        max_space_axes=3, min_space_axes=2, max_ndim=4, shear=True, oblique=True,
+        non_space_axes=frozenset({"time", "other", "channel"}),   # 4-D enhanced; SEG channel layout
+        label_table=True,                                          # SEG segments
+        key_value=False,
     )
     fields = FieldTable(core_owned=CORE_OWNED, data_dependent=DATA_DEPENDENT)
 
@@ -265,8 +269,20 @@ class DicomPlugin(FormatPlugin):
             report.warn(f"{len(series)} series found; read as separate images")
         images = []
         for datasets in series.values():
+            # --- phases 2 and 3: SEG and enhanced multi-frame objects (dicom_seg.py, dicom_enhanced.py) ---
+            from medvol.plugins import dicom_enhanced, dicom_seg
+
+            if dicom_seg.is_seg_dataset(datasets[0]):
+                for ds in datasets:
+                    images.extend(dicom_seg.read_seg(ds, policy, report))
+                continue
+            if dicom_enhanced.is_enhanced(datasets[0]):
+                images.extend(dicom_enhanced.read_enhanced(datasets, policy, report))
+                continue
             if "NumberOfFrames" in datasets[0] and int(datasets[0].NumberOfFrames) > 1:
-                raise NotImplementedError("enhanced multi-frame DICOM is phase 2 of the DICOM reader")
+                raise NotImplementedError("multi-frame DICOM without functional groups (e.g. multi-frame secondary "
+                                          "capture, NM) is not supported")
+            # --- end of phases 2 and 3 ---
             for stack in _stacks(datasets, policy, report):
                 for slices, step in _sorted_stack(stack, policy, report):
                     images.append(self._image(slices, step, policy, report))
@@ -321,8 +337,23 @@ class DicomPlugin(FormatPlugin):
             values["fill"] = int(first.PixelPaddingValue)
         return values
 
-    def write(self, image: Image, path: PathLike, policy: Policy) -> Report:
-        """Re-emit the original series into the directory ``path`` (spec 7.6)."""
+    def write(self, image: Image, path: PathLike, policy: Policy, reference=None, **options) -> Report:
+        """Write ``image`` as DICOM (spec 7.6).
+
+        - label maps and SEG sources: a DICOM SEG via highdicom (``dicom_seg.write_seg``; the
+          referenced image series is given as ``reference=``);
+        - enhanced multi-frame sources: the original file(s) re-emitted (``dicom_enhanced``);
+        - single-frame sources: the original series re-emitted into the directory ``path``.
+        """
+        from medvol.plugins import dicom_seg
+
+        if dicom_seg.is_segmentation(image):
+            return dicom_seg.write_seg(image, str(path), policy, reference=reference)
+        source = next((entry for entry in image.meta.source if entry.format == "dicom"), None)
+        if source is not None and "frames" in source.header:
+            from medvol.plugins.dicom_enhanced import write_enhanced
+
+            return write_enhanced(image, str(path), policy)
         from medvol.plugins.dicom_write import write_series
 
         return write_series(image, str(path), policy)
