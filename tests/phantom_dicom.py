@@ -244,3 +244,74 @@ def write_seg(path, series_dir, masks: Dict[int, np.ndarray], segmentation_type:
             ds.PixelData = np.ascontiguousarray(frames).astype(frames.dtype.newbyteorder("<")).tobytes()
         ds.save_as(str(path), enforce_file_format=True)
     return str(path)
+
+
+# ---------------------------------------------------------------------------------------------
+# RTSTRUCT
+# ---------------------------------------------------------------------------------------------
+
+RTSTRUCT_STORAGE = "1.2.840.10008.5.1.4.1.1.481.3"
+
+
+def write_rtstruct(path, series_dir, truth: phantom.Truth, rois: List[Dict], frame_of_reference: str = None) -> str:
+    """An RT Structure Set on the single-frame series in ``series_dir`` (written from ``truth``).
+
+    ``rois``: ``{number, name, color, code: (scheme, value, meaning) or None, contours: [(k, points,
+    type)]}`` with ``points`` an (N, 2) array of (i, j) = (column, row) index coordinates of the
+    truth on slice ``k`` (converted to patient mm with the truth's affine; ``k`` may be fractional
+    to place a contour off the slice planes) and ``type`` the ContourGeometricType (default
+    CLOSED_PLANAR).
+    """
+    import pydicom
+    from pydicom.dataset import Dataset, FileMetaDataset
+    from pydicom.sequence import Sequence as Seq
+    from pydicom.uid import ExplicitVRLittleEndian, generate_uid
+
+    images = [pydicom.dcmread(os.path.join(series_dir, name)) for name in sorted(os.listdir(series_dir)) if name.endswith(".dcm")]
+    first = images[0]
+    frame_of_reference = frame_of_reference or str(first.FrameOfReferenceUID)
+    meta = FileMetaDataset()
+    meta.MediaStorageSOPClassUID = RTSTRUCT_STORAGE
+    meta.MediaStorageSOPInstanceUID = generate_uid()
+    meta.TransferSyntaxUID = ExplicitVRLittleEndian
+    ds = Dataset()
+    ds.file_meta = meta
+    ds.SOPClassUID, ds.SOPInstanceUID = RTSTRUCT_STORAGE, meta.MediaStorageSOPInstanceUID
+    ds.StudyInstanceUID, ds.SeriesInstanceUID = first.StudyInstanceUID, generate_uid()
+    ds.Modality = "RTSTRUCT"
+    ds.PatientName, ds.PatientID = first.PatientName, first.PatientID
+    ds.SeriesNumber, ds.InstanceNumber = 40, 1
+    ds.StructureSetLabel, ds.StructureSetDate, ds.StructureSetTime = "PHANTOM", "20261106", "101500"
+    contour_images = Seq([_item(ReferencedSOPClassUID=im.SOPClassUID, ReferencedSOPInstanceUID=im.SOPInstanceUID) for im in images])
+    series = _item(SeriesInstanceUID=first.SeriesInstanceUID, ContourImageSequence=contour_images)
+    study = _item(ReferencedSOPClassUID="1.2.840.10008.3.1.2.3.1", ReferencedSOPInstanceUID=first.StudyInstanceUID,
+                  RTReferencedSeriesSequence=Seq([series]))
+    ds.ReferencedFrameOfReferenceSequence = Seq([_item(FrameOfReferenceUID=frame_of_reference, RTReferencedStudySequence=Seq([study]))])
+    structure, contours, observations = [], [], []
+    a = truth.affine_lps
+    for n, roi in enumerate(rois):
+        structure.append(_item(ROINumber=roi["number"], ReferencedFrameOfReferenceUID=frame_of_reference, ROIName=roi["name"],
+                               ROIGenerationAlgorithm="MANUAL"))
+        items = []
+        for contour in roi["contours"]:
+            k, points = contour[0], np.asarray(contour[1], dtype=float)
+            kind = contour[2] if len(contour) > 2 else "CLOSED_PLANAR"
+            index = np.c_[points, np.full(len(points), float(k)), np.ones(len(points))]
+            world = (a @ index.T)[:3].T
+            items.append(_item(ContourGeometricType=kind, NumberOfContourPoints=len(points),
+                               ContourData=[_ds(v) for v in world.reshape(-1)]))
+        roi_contour = _item(ReferencedROINumber=roi["number"], ContourSequence=Seq(items))
+        if roi.get("color") is not None:
+            roi_contour.ROIDisplayColor = list(roi["color"])
+        contours.append(roi_contour)
+        observation = _item(ObservationNumber=n + 1, ReferencedROINumber=roi["number"], RTROIInterpretedType="ORGAN",
+                            ROIInterpreter="")
+        if roi.get("code") is not None:
+            scheme, value, meaning = roi["code"]
+            observation.RTROIIdentificationCodeSequence = Seq([_item(CodeValue=value, CodingSchemeDesignator=scheme, CodeMeaning=meaning)])
+        observations.append(observation)
+    ds.StructureSetROISequence = Seq(structure)
+    ds.ROIContourSequence = Seq(contours)
+    ds.RTROIObservationsSequence = Seq(observations)
+    ds.save_as(str(path), enforce_file_format=True)
+    return str(path)

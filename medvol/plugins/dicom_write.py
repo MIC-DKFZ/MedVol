@@ -1,7 +1,8 @@
 """DICOM writing (spec 7.6): re-emit the original series from ``source``.
 
 Every file is rebuilt from ``shared`` + its ``per_file`` entry with the original UIDs; pixel data
-comes from the array. Core-owned elements (geometry, rescale, pixel description) are reused while the
+comes from the array (physical values read with ``dicom_rescale='apply'`` are inverted per file
+with that file's own rescale and must reproduce the array exactly, else the write is refused). Core-owned elements (geometry, rescale, pixel description) are reused while the
 geometry is unchanged and regenerated from the core otherwise; data-dependent elements are kept while
 the source fingerprint matches, and otherwise dropped (new SOP Instance UIDs are generated).
 """
@@ -121,8 +122,13 @@ def write_series(image: Image, directory: str, policy: Policy) -> Report:
     header = source.header
     shared, per_file, names = header["shared"], header["per_file"], header["file_names"]
     array = image.array
-    if array.ndim != 3 or array.shape[0] != len(per_file):
-        raise GeometryError(f"the array {array.shape} does not match the {len(per_file)} source files any more")
+    if array.ndim != 3:
+        raise GeometryError(f"the array {array.shape} is not a [z, y, x] volume; a single-frame series is re-emitted "
+                            "from a 3-D array")
+    if array.shape[0] != len(per_file):
+        raise GeometryError(f"the array has {array.shape[0]} slices but the source series has {len(per_file)} files; "
+                            "re-emitting needs one array slice per source file (an image whose slice count changed, "
+                            "e.g. by resampling or cropping, cannot be written as the original series)")
     fp = source.fingerprint or {}
     geometry_unchanged = fp.get("geometry") == fingerprint.geometry_hash(image.meta) and list(fp.get("shape", [])) == list(array.shape)
     data_unchanged = geometry_unchanged and fp.get("data") == fingerprint.data_hash(array)
@@ -133,8 +139,10 @@ def write_series(image: Image, directory: str, policy: Policy) -> Report:
         report.warn("the data or geometry changed since the series was read: new SOP Instance UIDs, "
                     f"{', '.join(DATA_DEPENDENT_DROP)} dropped")
     values = image.meta.values
+    array = _stored_values(array, shared, per_file, names, values, report)
     os.makedirs(directory, exist_ok=True)
     series_uid_note = False
+    slice_location_dropped = False
     for k, (fields, name) in enumerate(zip(per_file, names)):
         merged = {**shared, **fields}
         merged = {key: merged[key] for key in list(shared) + [key for key in fields if key not in shared]}
@@ -144,6 +152,9 @@ def write_series(image: Image, directory: str, policy: Policy) -> Report:
             dataset.ImagePositionPatient = [_ds_string(v) for v in positions[k]]
             dataset.ImageOrientationPatient = [_ds_string(v) for v in orientation]
             dataset.PixelSpacing = [_ds_string(v) for v in spacing]
+            if "SliceLocation" in dataset:
+                del dataset.SliceLocation
+                slice_location_dropped = True
         if values.scale is not None:
             dataset.RescaleSlope = _ds_string(values.scale)
             dataset.RescaleIntercept = _ds_string(values.offset or 0.0)
@@ -170,9 +181,49 @@ def write_series(image: Image, directory: str, policy: Policy) -> Report:
         path = Path(directory) / name
         path.parent.mkdir(parents=True, exist_ok=True)
         dataset.save_as(str(path), enforce_file_format=True)
+    if slice_location_dropped:
+        report.warn("SliceLocation dropped: it described the original geometry")
     if series_uid_note:
         report.warn("the SeriesInstanceUID is kept; give the series a new one if it replaces the original elsewhere")
     return report
+
+
+def _stored_values(array: np.ndarray, shared: Dict[str, Any], per_file: List[Dict[str, Any]], names: List[str],
+                   values, report: Report) -> np.ndarray:
+    """The array as the stored integers of the source files.
+
+    A float array over an integer source holds either physical values (``dicom_rescale='apply'``:
+    ``values.scale``/``offset`` unset), inverted per file with that file's own RescaleSlope and
+    RescaleIntercept, or stored values as floats (``values.scale``/``offset`` set, e.g. after
+    resampling). Either way the inversion must be exact (``dicom_rescale.invert``), else the write
+    is refused.
+    """
+    from medvol.plugins.dicom_rescale import RescaleError, invert, stored_dtype
+
+    bits = shared.get("BitsAllocated", per_file[0].get("BitsAllocated") if per_file else None)
+    representation = shared.get("PixelRepresentation", per_file[0].get("PixelRepresentation", 0) if per_file else 0)
+    if bits is None:
+        return array
+    target = stored_dtype(int(bits), int(representation or 0))
+    if array.dtype.kind == "f" and target.kind in "iu":
+        if values.scale is None and values.offset is None:
+            pairs = []
+            for fields in per_file:
+                merged = {**shared, **fields}
+                pairs.append((float(merged.get("RescaleSlope", 1) or 1), float(merged.get("RescaleIntercept", 0) or 0)))
+            what = "with each file's own RescaleSlope/RescaleIntercept"
+        else:
+            pairs = [None] * len(per_file)
+            what = "as stored values (values.scale/offset set)"
+        try:
+            stored = invert(array, pairs, target)
+        except RescaleError as error:
+            raise RescaleError(f"cannot write the {array.dtype.name} array {what} as {target.name}: {error}") from None
+        report.choose("dicom_rescale", f"inverted {what} to {target.name}: exact")
+        return stored
+    if array.dtype.itemsize != target.itemsize:
+        raise NotImplementedError(f"the array dtype {array.dtype} no longer matches BitsAllocated {bits} of the source")
+    return array
 
 
 def _regenerated_geometry(image: Image):
@@ -184,5 +235,6 @@ def _regenerated_geometry(image: Image):
     row_spacing, column_spacing = np.linalg.norm(row_vector), np.linalg.norm(column_vector)
     orientation = list(column_vector / column_spacing) + list(row_vector / row_spacing)
     origin = lps[:3, -1]
-    positions: List[np.ndarray] = [origin + k * step for k in range(image.array.shape[0])]
+    count = image.array.shape[[axis.name for axis in image.meta.axes].index("z")]
+    positions: List[np.ndarray] = [origin + k * step for k in range(count)]
     return positions, orientation, [row_spacing, column_spacing]

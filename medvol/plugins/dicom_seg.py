@@ -59,6 +59,8 @@ LABEL_MAP_SEGMENTATION_STORAGE = "1.2.840.10008.5.1.4.1.1.66.7"
 SEG_SOP_CLASSES = frozenset({SEGMENTATION_STORAGE, LABEL_MAP_SEGMENTATION_STORAGE})
 
 GEOMETRY_TOLERANCE = 1e-3      # mm: label-map grid vs referenced images
+NOT_RESAMPLED = ("{policy}='resample' does not apply to DICOM SEG: label maps are not interpolated; read the SEG "
+                 "with the default policies and resample the label map explicitly if needed")
 
 #: Segment fields owned by the core (values.labels); the rest of a segment item is verbatim.
 CORE_SEGMENT_FIELDS = frozenset({"SegmentNumber", "SegmentLabel", "SegmentedPropertyTypeCodeSequence",
@@ -171,10 +173,12 @@ def _grid(clusters: List[List[Frame]], policy: Policy, report: Report) -> List[T
             raise GeometryError(f"irregular slice spacing {np.round(gaps, 4).tolist()} mm "
                                 "(policy dicom_irregular_spacing='error')")
         if policy.dicom_irregular_spacing == "resample":
-            raise NotImplementedError("dicom_irregular_spacing='resample' is not implemented yet")
+            raise NotImplementedError(NOT_RESAMPLED.format(policy="dicom_irregular_spacing"))
         cluster_of = {id(cluster[0]): cluster for cluster in clusters}
-        return [(list(range(len(run))), [cluster_of[id(rep)] for rep in run], step)
-                for run, step in _sorted_stack(representatives, policy, report)]
+        runs = _sorted_stack(representatives, policy, report)
+        if any(not isinstance(step, np.ndarray) for _, step in runs):
+            raise NotImplementedError(NOT_RESAMPLED.format(policy="dicom_tilt"))
+        return [(list(range(len(run))), [cluster_of[id(rep)] for rep in run], step) for run, step in runs]
     indices = np.concatenate([[0], np.cumsum(counts)])
     n = int(indices[-1]) + 1
     step = (positions[-1] - positions[0]) / (n - 1)
@@ -187,7 +191,7 @@ def _grid(clusters: List[List[Frame]], policy: Policy, report: Report) -> List[T
         if policy.dicom_tilt == "error":
             raise GeometryError(f"gantry tilt of {angle:.3f} degrees (policy dicom_tilt='error')")
         if policy.dicom_tilt == "resample":
-            raise NotImplementedError("dicom_tilt='resample' is not implemented yet")
+            raise NotImplementedError(NOT_RESAMPLED.format(policy="dicom_tilt"))
         report.choose("dicom_tilt", "exact")
         report.warn(f"gantry tilt of {angle:.3f} degrees: stored as an exact sheared grid")
     if n > len(clusters):

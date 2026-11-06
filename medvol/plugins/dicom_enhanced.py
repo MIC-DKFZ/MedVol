@@ -29,8 +29,16 @@ Groups Sequence itself is not stored a second time.
 
 Writing (``write_enhanced``) re-emits the original file(s): every top-level element and every
 functional group comes from ``source``, pixel data from the array, put back at each frame's
-original index. Regenerating per-frame geometry after the geometry changed is not implemented and
-raises ``NotImplementedError``.
+original index. When the geometry changed, Plane Position, Plane Orientation and Pixel Measures
+are regenerated from the core in the functional groups (shared or per frame) where the source has
+them; when ``values.scale``/``offset`` changed, the Pixel Value Transformation is regenerated; and
+physical values read with ``dicom_rescale='apply'`` are inverted per frame (``dicom_rescale``).
+Frame order, Dimension Index Values and In-Stack Position Numbers are kept verbatim.
+
+Policies ``dicom_rescale='apply'`` (per-frame rescale, ``dicom_rescale.py``) and
+``dicom_tilt``/``dicom_irregular_spacing='resample'`` (``dicom_resample.py``) apply to the frames
+as to single-frame series; a 4-D image is resampled per time point (or other index) with the same
+plan, since every time point has the same slice positions.
 """
 
 from __future__ import annotations
@@ -361,19 +369,34 @@ def frame_header(datasets: List, frames: Sequence[Frame]) -> Dict[str, Any]:
             "file_names": [str(getattr(ds, "filename_relative", "")) for ds in datasets], "frames": entries}
 
 
-def _image(grid: List[List[Frame]], step: np.ndarray, axis_type: Optional[str], datasets: List, pixels: List[np.ndarray],
+def _image(grid: List[List[Frame]], step, axis_type: Optional[str], datasets: List, pixels: List[np.ndarray],
            policy: Policy, report: Report) -> Image:
+    """The image of frames on a grid; ``step`` is the slice step vector or a ``dicom_resample.Resampling``."""
+    from medvol.plugins import dicom_resample
+    from medvol.plugins.dicom import _resample_volume
+
     first = grid[0][0]
     iop = np.asarray(first.ImageOrientationPatient, dtype=np.float64)
     row_spacing, column_spacing = first.PixelSpacing
-    linear = np.column_stack([step, iop[3:] * row_spacing, iop[:3] * column_spacing])
-    matrix = homogeneous(linear, first.ImagePositionPatient)
+    resampling = step if isinstance(step, dicom_resample.Resampling) else None
     uid = getattr(datasets[first.file], "FrameOfReferenceUID", None)
     reference = {"scheme": "dicom_frame_of_reference", "id": str(uid)} if uid else None
-    space = patient_space(matrix, ["z", "y", "x"], policy.world_frame, reference=reference)
+
+    def space_of(slice_step, origin):
+        linear = np.column_stack([slice_step, iop[3:] * row_spacing, iop[:3] * column_spacing])
+        return patient_space(homogeneous(linear, origin), ["z", "y", "x"], policy.world_frame, reference=reference)
 
     ordered = [frame for row in grid for frame in row]
     array = np.stack([np.stack([pixels[f.file][f.index] for f in row]) for row in grid])
+    values, pairs = _values(ordered, datasets[first.file], policy, report)
+    if pairs is not None:
+        from medvol.plugins.dicom_rescale import to_physical
+
+        flat, kind = to_physical(array.reshape(-1, *array.shape[-2:]), pairs)
+        array = flat.reshape(array.shape)
+        report.choose("dicom_rescale", f"apply: physical values slope * stored + intercept per frame, {kind}")
+        report.warn(f"rescale slope/intercept differ between frames {sorted(set(pairs))}: stored the physical values "
+                    f"as {array.dtype.name} (policy dicom_rescale='apply'); values.scale/offset not set")
     axes: List[Dict[str, Any]] = [{"name": "z", "type": "space"}, {"name": "y", "type": "space"}, {"name": "x", "type": "space"}]
     index_order = [2, 1, 0]
     if axis_type is None:
@@ -381,35 +404,49 @@ def _image(grid: List[List[Frame]], step: np.ndarray, axis_type: Optional[str], 
     else:
         axes.insert(0, {"name": "t" if axis_type == "time" else "u", "type": axis_type})
         index_order = [3, 2, 1, 0]
-    values = _values(ordered, datasets[first.file])
     header = frame_header(datasets, ordered)
-    meta = Meta(axes=axes, spaces=[space], values=values, shape=array.shape)
+    if resampling is None:
+        space = space_of(step, first.ImagePositionPatient)
+        fp = fingerprint.compute(array, Meta(axes=axes, spaces=[space], values=values, shape=array.shape))
+    else:
+        array, fp, values = _resample_volume(array, resampling, iop, (row_spacing, column_spacing), values,
+                                             space_of, axes, report)
+        space = space_of(resampling.step, resampling.origin)
     source = {
         "format": "dicom",
         "files": header["file_names"],
         "reader": {"name": "medvol"},
         "index_map": {"axis_order": index_order, "flipped": [False] * len(index_order), "offset": [0] * len(index_order)},
-        "fingerprint": fingerprint.compute(array, meta),
+        "fingerprint": fp,
         "header": header,
     }
     return Image(array, Meta(axes=axes, spaces=[space], values=values, source=[source], shape=array.shape))
 
 
-def _values(frames: List[Frame], ds) -> Dict[str, Any]:
+def _values(frames: List[Frame], ds, policy: Policy, report: Report) -> Tuple[Dict[str, Any], Optional[List]]:
+    """(values, per-frame rescale pairs to apply (frames in array order) or None)."""
     pairs = {frame.rescale for frame in frames}
-    if len(pairs) > 1:
-        raise GeometryError("rescale slope/intercept differ between frames; one MLArray holds one scale "
-                            "(per-frame rescaling is not supported yet)")
     values: Dict[str, Any] = {"kind": "measurement"}
-    pair = pairs.pop()
-    if pair is not None:
-        values["scale"], values["offset"] = pair
+    apply = None
+    if len(pairs) > 1:
+        if policy.dicom_rescale == "error":
+            raise GeometryError("rescale slope/intercept differ between frames; one MLArray holds one scale "
+                                "(policy dicom_rescale='error'; dicom_rescale='apply' stores the physical values)")
+        apply = [frame.rescale for frame in frames]
+    else:
+        pair = pairs.pop()
+        if pair is not None:
+            values["scale"], values["offset"] = pair
     rescale_type = (frames[0].rescale_type or "").upper()
     if rescale_type == "HU" or (not rescale_type and str(getattr(ds, "Modality", "")) == "CT"):
         values["unit"] = "hounsfield_unit"
     if "PixelPaddingValue" in ds:
-        values["fill"] = int(ds.PixelPaddingValue)
-    return values
+        if apply is None:
+            values["fill"] = int(ds.PixelPaddingValue)
+        else:
+            report.warn(f"PixelPaddingValue {int(ds.PixelPaddingValue)} is a stored value; with per-frame rescaling "
+                        "applied it maps to a different physical value per frame, so values.fill is not set")
+    return values, apply
 
 
 # ------------------------------------------------------------------------------------------------
@@ -420,11 +457,22 @@ def write_enhanced(image: Image, directory: str, policy: Policy) -> Report:
     """Re-emit the original multi-frame file(s) of ``image`` into ``directory`` (spec 7.6).
 
     Exact while the geometry and the rescale are unchanged: every element and functional group
-    comes from ``source``, the pixel data from the array. If only the data changed, data-dependent
-    elements are dropped and new SOP Instance UIDs are generated, as for single-frame series.
+    comes from ``source``, the pixel data from the array. Otherwise:
+
+    - geometry changed: Plane Position (per frame), Plane Orientation and Pixel Measures (Pixel
+      Spacing, and Spacing Between Slices where present) are regenerated from the core in the
+      functional groups where the source has them (shared or per frame);
+    - ``values.scale``/``values.offset`` differ from the source rescale: the Pixel Value
+      Transformation is regenerated from the core;
+    - physical values stored by ``dicom_rescale='apply'`` (float array, integer source): every
+      frame is inverted with its own original rescale and must reproduce the array exactly, else
+      the write is refused (``dicom_rescale.invert``);
+    - data or geometry changed: data-dependent elements are dropped and new SOP Instance UIDs
+      generated, as for single-frame series.
     """
+    from medvol.plugins.dicom_rescale import RescaleError, invert, stored_dtype
     from medvol.plugins.dicom_write import (DATA_DEPENDENT_DROP, EXPLICIT_LE, RLE_LOSSLESS, UNCOMPRESSED,
-                                            dict_to_dataset)
+                                            _ds_string, _regenerated_geometry, dict_to_dataset)
 
     pydicom = _pydicom()
     report = Report("write", "dicom", str(directory))
@@ -433,15 +481,20 @@ def write_enhanced(image: Image, directory: str, policy: Policy) -> Report:
     shared, per_file, names, frames = header["shared"], header["per_file"], header["file_names"], header["frames"]
     array = image.array
     if array.ndim < 3 or int(np.prod(array.shape[:-2])) != len(frames):
-        raise GeometryError(f"the array {array.shape} does not match the {len(frames)} source frames any more")
+        raise GeometryError(f"the array {array.shape} has {int(np.prod(array.shape[:-2])) if array.ndim >= 3 else 0} "
+                            f"frames but the source has {len(frames)}; re-emitting needs one array frame per source "
+                            "frame (a resampled image with a different slice count cannot be written as the original object)")
     fp = source.fingerprint or {}
     geometry_unchanged = fp.get("geometry") == fingerprint.geometry_hash(image.meta) and list(fp.get("shape", [])) == list(array.shape)
+    data_unchanged = geometry_unchanged and fp.get("data") == fingerprint.data_hash(array)
+    names_of_axes = [axis.name for axis in image.meta.axes]
+    nz = array.shape[names_of_axes.index("z")]
     if not geometry_unchanged:
-        raise NotImplementedError("the geometry changed since the multi-frame object was read; regenerating its "
-                                  "per-frame functional groups is not implemented (only the original geometry is re-emitted)")
-    data_unchanged = fp.get("data") == fingerprint.data_hash(array)
+        positions, orientation, spacing = _regenerated_geometry(image)
+        slice_spacing = abs(float(np.dot(positions[1] - positions[0], np.cross(orientation[:3], orientation[3:])))) if nz > 1 else None
+        report.choose("geometry", "regenerated from the core")
     if not data_unchanged:
-        report.warn("the data changed since the object was read: new SOP Instance UIDs, "
+        report.warn("the data or geometry changed since the object was read: new SOP Instance UIDs, "
                     f"{', '.join(DATA_DEPENDENT_DROP)} dropped")
     flat = array.reshape(len(frames), *array.shape[-2:])
     values = image.meta.values
@@ -459,8 +512,26 @@ def write_enhanced(image: Image, directory: str, policy: Policy) -> Report:
         if "PerFrameFunctionalGroupsSequence" in merged or any(frames[slot]["functional_groups"] for _, slot in slots):
             dataset.PerFrameFunctionalGroupsSequence = pydicom.sequence.Sequence(
                 [dict_to_dataset(frames[slot]["functional_groups"], report) for _, slot in slots])
-        _check_rescale(dataset, values)
+        if not geometry_unchanged:
+            _set_geometry(dataset, [positions[slot % nz] for _, slot in slots], orientation, spacing, slice_spacing,
+                          _ds_string)
         data = np.ascontiguousarray(flat[[slot for _, slot in slots]])
+        target_dtype = stored_dtype(int(dataset.BitsAllocated), int(getattr(dataset, "PixelRepresentation", 0) or 0))
+        if data.dtype.kind == "f":
+            if values.scale is None and values.offset is None:
+                pairs = [frame.rescale for frame in frames_of(dataset)]
+                what = "with each frame's original rescale"
+            else:
+                pairs = [None] * len(slots)
+                what = "as stored values (values.scale/offset set)"
+                _set_rescale(dataset, values, report, _ds_string)
+            try:
+                data = invert(data, pairs, target_dtype)
+            except RescaleError as error:
+                raise RescaleError(f"{name}: cannot write the {flat.dtype.name} array {what} as {target_dtype.name}: {error}") from None
+            report.choose("dicom_rescale", f"inverted {what} to {target_dtype.name}: exact")
+        else:
+            _set_rescale(dataset, values, report, _ds_string)
         if data.dtype.itemsize * 8 != int(dataset.BitsAllocated):
             raise NotImplementedError(f"the array dtype {data.dtype} no longer matches BitsAllocated {dataset.BitsAllocated}")
         dataset.Rows, dataset.Columns = data.shape[-2:]
@@ -487,11 +558,86 @@ def write_enhanced(image: Image, directory: str, policy: Policy) -> Report:
     return report
 
 
-def _check_rescale(dataset, values) -> None:
-    """The rescale in the re-emitted functional groups must still be the core's ``values``."""
-    expected = None if values.scale is None and values.offset is None else (
-        float(values.scale if values.scale is not None else 1.0), float(values.offset or 0.0))
-    for frame in frames_of(dataset):
-        if frame.rescale != expected:
-            raise NotImplementedError(f"values.scale/offset {expected} differ from the rescale {frame.rescale} in the "
-                                      "functional groups; regenerating it is not implemented")
+def _group_items(dataset, keyword: str):
+    """(shared item or None, [per-frame items]) that hold functional group ``keyword``."""
+    shared = None
+    if "SharedFunctionalGroupsSequence" in dataset and len(dataset.SharedFunctionalGroupsSequence):
+        item = dataset.SharedFunctionalGroupsSequence[0]
+        shared = item if keyword in item and len(item[keyword].value) else None
+    per_frame = []
+    for item in getattr(dataset, "PerFrameFunctionalGroupsSequence", []):
+        per_frame.append(item[keyword].value[0] if keyword in item and len(item[keyword].value) else None)
+    return (shared[keyword].value[0] if shared is not None else None), per_frame
+
+
+def _set_geometry(dataset, positions: List[np.ndarray], orientation, spacing, slice_spacing: Optional[float], ds_string) -> None:
+    """Plane Position, Plane Orientation and Pixel Measures of every frame, from the core.
+
+    Each group is rewritten where the source has it (per frame and/or shared). Plane Position
+    is per frame; a shared Plane Position is only kept when every frame of the file gets the same
+    position, otherwise it moves to the per-frame groups.
+    """
+    from pydicom.dataset import Dataset
+    from pydicom.sequence import Sequence
+
+    iop = [ds_string(v) for v in orientation]
+    shared_position, per_position = _group_items(dataset, "PlanePositionSequence")
+    per_frame = list(getattr(dataset, "PerFrameFunctionalGroupsSequence", []))
+    distinct = {tuple(np.round(p, 12)) for p in positions}
+    if shared_position is not None and len(distinct) > 1:
+        del dataset.SharedFunctionalGroupsSequence[0].PlanePositionSequence
+        shared_position = None
+    for n, item in enumerate(per_frame):
+        if per_position[n] is None and shared_position is None:
+            item.PlanePositionSequence = Sequence([Dataset()])
+            per_position[n] = item.PlanePositionSequence[0]
+    if shared_position is not None:
+        shared_position.ImagePositionPatient = [ds_string(v) for v in positions[0]]
+    for n, position_item in enumerate(per_position):
+        if position_item is not None:
+            position_item.ImagePositionPatient = [ds_string(v) for v in positions[n]]
+    if not per_frame and "ImagePositionPatient" in dataset:
+        dataset.ImagePositionPatient = [ds_string(v) for v in positions[0]]
+
+    shared_orientation, per_orientation = _group_items(dataset, "PlaneOrientationSequence")
+    for item in [shared_orientation, *per_orientation]:
+        if item is not None:
+            item.ImageOrientationPatient = iop
+    if shared_orientation is None and all(i is None for i in per_orientation) and "ImageOrientationPatient" in dataset:
+        dataset.ImageOrientationPatient = iop
+
+    shared_measures, per_measures = _group_items(dataset, "PixelMeasuresSequence")
+    for item in [shared_measures, *per_measures]:
+        if item is not None:
+            item.PixelSpacing = [ds_string(v) for v in spacing]
+            if slice_spacing is not None and "SpacingBetweenSlices" in item:
+                item.SpacingBetweenSlices = ds_string(slice_spacing)
+    if shared_measures is None and all(i is None for i in per_measures) and "PixelSpacing" in dataset:
+        dataset.PixelSpacing = [ds_string(v) for v in spacing]
+
+
+def _set_rescale(dataset, values, report: Report, ds_string) -> None:
+    """Regenerate the Pixel Value Transformation from ``values.scale``/``offset`` where it differs."""
+    expected = (float(values.scale if values.scale is not None else 1.0), float(values.offset or 0.0))
+    current = [frame.rescale for frame in frames_of(dataset)]
+    if all(pair == expected for pair in current) or (values.scale is None and values.offset is None
+                                                     and all(pair is None for pair in current)):
+        return
+    shared, per_frame = _group_items(dataset, "PixelValueTransformationSequence")
+    items = [item for item in [shared, *per_frame] if item is not None]
+    if not items and ("RescaleSlope" in dataset or "RescaleIntercept" in dataset):
+        items = [dataset]
+    if not items:
+        from pydicom.dataset import Dataset
+        from pydicom.sequence import Sequence
+
+        if "SharedFunctionalGroupsSequence" not in dataset or not len(dataset.SharedFunctionalGroupsSequence):
+            dataset.SharedFunctionalGroupsSequence = Sequence([Dataset()])
+        item = Dataset()
+        item.RescaleType = "US"
+        dataset.SharedFunctionalGroupsSequence[0].PixelValueTransformationSequence = Sequence([item])
+        items = [item]
+    for item in items:
+        item.RescaleSlope = ds_string(expected[0])
+        item.RescaleIntercept = ds_string(expected[1])
+    report.choose("rescale", f"regenerated from the core: slope {expected[0]}, intercept {expected[1]}")

@@ -110,8 +110,9 @@ class TestEnhanced3D(EnhancedCase):
         self.assertEqual(report.choices["dicom_tilt"], "exact")
         with self.assertRaises(GeometryError):
             medvol.read(path, dicom_tilt="error")
-        with self.assertRaises(NotImplementedError):
-            medvol.read(path, dicom_tilt="resample")
+        image, report = medvol.read(path, dicom_tilt="resample")
+        self.assertTrue(report.choices["dicom_tilt"].startswith("resample"))
+        _check_resampled(self, image, truth)
 
     def test_irregular_spacing_is_refused_or_split(self):
         truth = _truth()
@@ -229,7 +230,7 @@ class TestEnhancedWrite(EnhancedCase):
             self.assertEqual(_differences(a, b), [])
             np.testing.assert_array_equal(a.pixel_array, b.pixel_array)
 
-    def test_changed_data_gets_new_instance_uid_and_changed_geometry_is_refused(self):
+    def test_changed_data_gets_new_instance_uid(self):
         path = self.enhanced()
         image, _ = medvol.read(path)
         image.array[0, 0, 0] += 1
@@ -240,12 +241,113 @@ class TestEnhancedWrite(EnhancedCase):
         again, _ = medvol.read(self.dir / "out")
         np.testing.assert_array_equal(again.array, image.array)
 
-        moved = image.space().matrix()
-        moved[:3, -1] += 1.0
-        image.meta.spaces = [dict(image.space().to_dict(), from_array={"array_axes": ["z", "y", "x"], "matrix": moved.tolist()})]
-        with self.assertRaises(NotImplementedError):
-            medvol.write(image, self.dir / "out2", format="dicom")
+    def test_changed_geometry_is_regenerated_in_the_functional_groups(self):
+        rotation = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])     # 90 degrees about z
+        cases = {
+            "shared": dict(truth=_truth()),                                        # Canon-like: shared groups
+            "per_frame": dict(truth=_truth(), per_frame_geometry=True),            # Philips/Siemens-like
+            "mr4d": dict(truth=_truth(SHAPE_4D), mr=True, per_frame_geometry=True),
+        }
+        for name, kwargs in cases.items():
+            with self.subTest(case=name):
+                path = self.enhanced(f"{name}.dcm", **kwargs)
+                image, _ = medvol.read(path)
+                matrix = image.space().matrix()
+                moved = matrix.copy()
+                moved[:3, :3] = rotation @ matrix[:3, :3] @ np.diag([1.0, 1.5, 0.8])  # new orientation and spacings
+                moved[:3, -1] += [1.0, -2.0, 3.5]
+                names = list(image.space().from_array.array_axes)
+                image.meta.spaces = [dict(image.space().to_dict(), from_array={"array_axes": names, "matrix": moved.tolist()})]
+                out = self.dir / f"out_{name}"
+                report = medvol.write(image, out, format="dicom")
+                self.assertEqual(report.choices["geometry"], "regenerated from the core")
+                again, _ = medvol.read(out / path.name)
+                np.testing.assert_allclose(again.space().matrix(), moved, atol=1e-6)
+                np.testing.assert_array_equal(again.array, image.array)
+                written, original = pydicom.dcmread(out / path.name), pydicom.dcmread(path)
+                for keyword in ("PlaneOrientationSequence", "PixelMeasuresSequence"):    # groups stay where they were
+                    self.assertEqual(keyword in written.SharedFunctionalGroupsSequence[0],
+                                     keyword in original.SharedFunctionalGroupsSequence[0])
+                self.assertNotEqual(written.SOPInstanceUID, original.SOPInstanceUID)
 
+    def test_changed_rescale_is_regenerated(self):
+        path = self.enhanced(rescale=(2.0, -1024.0))
+        image, _ = medvol.read(path)
+        image.meta.values = dict(image.meta.values.to_dict(), scale=0.5, offset=-10.0)
+        report = medvol.write(image, self.dir / "out", format="dicom")
+        self.assertIn("rescale", report.choices)
+        again, _ = medvol.read(self.dir / "out")
+        self.assertEqual((again.meta.values.scale, again.meta.values.offset), (0.5, -10.0))
+        np.testing.assert_array_equal(again.array, image.array)
+
+
+def _check_resampled(test, image, truth, exact_coverage=True):
+    from medvol.geometry import has_shear, lps_matrix
+
+    test.assertFalse(has_shear(lps_matrix(image.space())[:3, :3]))
+    expected = phantom.expected_linear(image, truth)
+    if exact_coverage:
+        np.testing.assert_array_equal(np.isnan(image.array), np.isnan(expected))
+    covered = ~np.isnan(image.array)
+    test.assertGreater(np.count_nonzero(covered), image.array.size // 3)
+    np.testing.assert_allclose(image.array[covered], expected[covered], rtol=0, atol=1e-3)
+
+
+def _per_frame_rescale(path, rescale):
+    """Move the Pixel Value Transformation into the per-frame groups: ``rescale(in-stack position) -> pair``."""
+    ds = pydicom.dcmread(path)
+    shared = ds.SharedFunctionalGroupsSequence[0]
+    template = shared.PixelValueTransformationSequence[0]
+    del shared.PixelValueTransformationSequence
+    for item in ds.PerFrameFunctionalGroupsSequence:
+        position = int(item.FrameContentSequence[0].InStackPositionNumber)
+        transformation = pydicom.dataset.Dataset()
+        transformation.RescaleSlope, transformation.RescaleIntercept = rescale(position)
+        transformation.RescaleType = template.RescaleType
+        item.PixelValueTransformationSequence = pydicom.sequence.Sequence([transformation])
+    ds.save_as(path, enforce_file_format=True)
+
+
+class TestEnhancedRescaleAndResample(EnhancedCase):
+    def test_per_frame_rescale_apply_and_exact_write_back(self):
+        path = self.enhanced(rescale=(1.0, 0.0))
+        _per_frame_rescale(path, lambda n: (1 + n % 3, -1000 - n))
+        with self.assertRaisesRegex(GeometryError, "dicom_rescale"):
+            medvol.read(path)
+        image, report = medvol.read(path, dicom_rescale="apply")
+        self.assertEqual(image.array.dtype, np.float32)
+        self.assertEqual((image.meta.values.scale, image.meta.values.offset, image.meta.values.unit),
+                         (None, None, "hounsfield_unit"))
+        original = pydicom.dcmread(path)
+        for slot, entry in enumerate(image.meta.source[0].header["frames"]):
+            transformation = original.PerFrameFunctionalGroupsSequence[entry["frame_index"]].PixelValueTransformationSequence[0]
+            physical = original.pixel_array[entry["frame_index"]] * float(transformation.RescaleSlope) + float(transformation.RescaleIntercept)
+            np.testing.assert_array_equal(image.array[slot], physical)
+        medvol.write(image, self.dir / "x.mla")
+        again, _ = medvol.read(self.dir / "x.mla")
+        report = medvol.write(again, self.dir / "out", format="dicom")
+        self.assertEqual(report.warnings, [])
+        written = pydicom.dcmread(self.dir / "out" / path.name)
+        self.assertEqual(_differences(original, written), [])
+        np.testing.assert_array_equal(original.pixel_array, written.pixel_array)
+
+    def test_tilted_4d_resampled_per_time_point(self):
+        truth = phantom.Truth(shape=SHAPE_4D, affine_lps=phantom.sheared_truth().affine_lps, dtype="int16")
+        path = self.enhanced("tilt4d.dcm", truth, mr=True, per_frame_geometry=True)
+        image, report = medvol.read(path, dicom_tilt="resample")
+        self.assertEqual(image.array.shape, (3, 7, 6, 5))
+        _check_resampled(self, image, truth)
+
+    def test_irregular_enhanced_resampled(self):
+        truth = _truth()
+        path = self.enhanced(truth=truth, order=[5, 0, 2, 6, 1, 4])            # slice 3 missing
+        image, report = medvol.read(path, dicom_irregular_spacing="resample")
+        self.assertEqual(image.array.shape, (6, 6, 5))
+        _check_resampled(self, image, truth)
+        from medvol.plugins.dicom_rescale import RescaleError
+
+        with self.assertRaisesRegex(RescaleError, "refused"):                 # interpolated values are not stored integers
+            medvol.write(image, self.dir / "out", format="dicom")
 
 if __name__ == "__main__":
     unittest.main()

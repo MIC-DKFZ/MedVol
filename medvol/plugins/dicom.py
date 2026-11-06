@@ -1,13 +1,16 @@
 """DICOM plugin (spec sections 7.5 and 7.6).
 
 Reading, phase 1: single-frame series (CT, MR, PET, ...), regular or gantry-tilted. Phase 2
-(enhanced multi-frame, ``dicom_enhanced.py``) and phase 3 (DICOM SEG, ``dicom_seg.py``) are
-dispatched from ``DicomPlugin.read`` and ``DicomPlugin.write``.
+(enhanced multi-frame, ``dicom_enhanced.py``), phase 3 (DICOM SEG, ``dicom_seg.py``) and phase 4
+(RTSTRUCT, ``dicom_rtstruct.py``) are dispatched from ``DicomPlugin.read`` and ``DicomPlugin.write``.
 
 - pydicom parses files and decodes pixels; MedVol assembles the series and builds the geometry itself.
 - Files are grouped by SeriesInstanceUID, then by in-plane geometry (``dicom_stacks``), sorted by the
   projection of ImagePositionPatient on the slice normal (never by InstanceNumber), and checked for
   regular spacing (``dicom_irregular_spacing``) and tilt (``dicom_tilt``).
+- ``dicom_tilt='resample'`` and ``dicom_irregular_spacing='resample'`` resample the stack onto a
+  regular grid without shear (``dicom_resample.py``); ``dicom_rescale='apply'`` stores physical
+  values when the rescale differs between slices (``dicom_rescale.py``). Both are opt-in and reported.
 - The array is [slice, row, column] in C order; the patient space is built in DICOM's own LPS frame.
 - ``source.header`` holds ``shared`` (identical in every file), ``per_file`` (only the fields that
   differ, in slice order) and ``file_names``; public elements by keyword, private ones by tag with
@@ -201,7 +204,7 @@ def _sorted_stack(stack: List, policy: Policy, report: Report) -> List[Tuple[Lis
             raise GeometryError(f"irregular slice spacing {np.round(distances, 4).tolist()} mm "
                                 "(policy dicom_irregular_spacing='error')")
         if policy.dicom_irregular_spacing == "resample":
-            raise NotImplementedError("dicom_irregular_spacing='resample' is not implemented yet")
+            return [(stack, _resampling(positions, normal, distances, policy, report, irregular=True))]
         runs: List[List[int]] = [[0]]
         reference = None
         for gap, distance in enumerate(distances):          # gap between slices gap and gap + 1
@@ -224,10 +227,73 @@ def _sorted_stack(stack: List, policy: Policy, report: Report) -> List[Tuple[Lis
         if policy.dicom_tilt == "error":
             raise GeometryError(f"gantry tilt of {angle:.3f} degrees (policy dicom_tilt='error')")
         if policy.dicom_tilt == "resample":
-            raise NotImplementedError("dicom_tilt='resample' is not implemented yet")
+            return [(stack, _resampling(positions, normal, distances, policy, report, irregular=False, source_step=step))]
         report.choose("dicom_tilt", "exact")
         report.warn(f"gantry tilt of {angle:.3f} degrees: stored as an exact sheared grid")
     return [(stack, step)]
+
+
+def _resampling(positions: np.ndarray, normal: np.ndarray, gaps: np.ndarray, policy: Policy, report: Report,
+                irregular: bool, source_step: np.ndarray = None):
+    """The plan for ``dicom_irregular_spacing='resample'`` or ``dicom_tilt='resample'`` (``dicom_resample``).
+
+    Resampling always yields a grid without shear, so a tilted irregular stack needs
+    ``dicom_tilt='resample'`` as well; ``exact`` (keep the shear) and ``error`` refuse it.
+    """
+    from medvol.plugins import dicom_resample
+
+    reasons = []
+    overall = positions[-1] - positions[0]
+    in_plane = overall - (overall @ normal) * normal
+    tilted = np.linalg.norm(in_plane) > TILT_TOLERANCE * abs(overall @ normal)
+    if irregular:
+        reasons.append("irregular slice spacing")
+        report.warn(f"irregular slice spacing {np.round(gaps, 4).tolist()} mm")
+    if tilted:
+        angle = float(np.degrees(np.arctan2(np.linalg.norm(in_plane), abs(overall @ normal))))
+        if policy.dicom_tilt == "error":
+            raise GeometryError(f"gantry tilt of {angle:.3f} degrees (policy dicom_tilt='error')")
+        if policy.dicom_tilt == "exact":
+            raise GeometryError(f"the stack is irregularly spaced and tilted by {angle:.3f} degrees: resampling "
+                                "(dicom_irregular_spacing='resample') gives a grid without shear, which drops the tilt "
+                                "that dicom_tilt='exact' keeps; use dicom_tilt='resample' as well, or "
+                                "dicom_irregular_spacing='split'")
+        reasons.append(f"gantry tilt of {angle:.3f} degrees")
+    plan = dicom_resample.plan(positions, normal, tuple(reasons), source_step=source_step)
+    if irregular:
+        report.choose("dicom_irregular_spacing", dicom_resample.method(plan))
+    if tilted:
+        report.choose("dicom_tilt", dicom_resample.method(plan))
+    return plan
+
+
+def _resample_volume(array: np.ndarray, resampling, orientation: np.ndarray, pixel_spacing, values: Dict[str, Any],
+                     space_of, axes: List[str], report: Report):
+    """Resample ``array`` (..., slices, rows, columns) per ``resampling`` (``dicom_resample``).
+
+    Returns (array, source fingerprint, values). The fingerprint describes the source data on its
+    source grid (the sheared grid of a tilted stack; no geometry hash for an irregular stack, which
+    has no single grid), so it does not match the resampled image and a DICOM write regenerates
+    geometry and UIDs or refuses.
+    """
+    from medvol.plugins import dicom_resample
+
+    if resampling.source_step is not None:
+        source_space = space_of(resampling.source_step, resampling.origin)
+        fp = fingerprint.compute(array, Meta(axes=axes, spaces=[source_space], values=values, shape=array.shape))
+    else:
+        fp = {"shape": [int(v) for v in array.shape], "dtype": array.dtype.name,
+              "geometry": "none: irregular source slice positions", "data": fingerprint.data_hash(array)}
+    fill = values.get("fill")
+    resampled, stats = dicom_resample.apply(array, resampling, orientation, pixel_spacing, fill)
+    values = dict(values)
+    if stats["outside_per_volume"] and fill is None:
+        values["fill"] = float("nan")
+    for line in dicom_resample.describe(resampling, stats, values.get("fill")):
+        report.warn(line)
+    report.warn(f"resampling changed the values: stored as {resampled.dtype.name}; the source fingerprint no longer "
+                "matches, so a DICOM write regenerates geometry and UIDs or is refused")
+    return resampled, fp, values
 
 
 # ------------------------------------------------------------------------------------------------
@@ -254,9 +320,28 @@ class DicomPlugin(FormatPlugin):
             return 0.0
         return 1.0 if _is_dicom_file(path) else 0.0
 
-    def read(self, path: PathLike, policy: Policy) -> Tuple[List[Image], Report]:
-        pydicom = _pydicom()
+    def read(self, path: PathLike, policy: Policy, reference: PathLike = None) -> Tuple[List[Image], Report]:
+        """All images in ``path``.
+
+        ``reference``: for an RTSTRUCT, the referenced image series (``dicom_rtstruct``). An
+        RTSTRUCT whose referenced series is read together with it (same directory) is rasterised
+        onto that series without ``reference``.
+        """
+        from medvol.plugins import dicom_rtstruct
+
+        if reference is not None:
+            return dicom_rtstruct.read_rtstruct(path, reference, policy)
         report = Report("read", self.name, str(path))
+        images, structure_sets = self.read_images(path, policy, report)
+        for ds in structure_sets:
+            images.append(dicom_rtstruct.rasterise_onto(ds, images, policy, report))
+        return images, report
+
+    def read_images(self, path: PathLike, policy: Policy, report: Report) -> Tuple[List[Image], List]:
+        """(images of every image and SEG series in ``path``, RTSTRUCT datasets, not yet rasterised)."""
+        from medvol.plugins import dicom_rtstruct
+
+        pydicom = _pydicom()
         files = _files(path)
         if not files:
             raise ValueError(f"No DICOM files in {path}.")
@@ -268,7 +353,12 @@ class DicomPlugin(FormatPlugin):
         if len(series) > 1:
             report.warn(f"{len(series)} series found; read as separate images")
         images = []
+        structure_sets = []
         for datasets in series.values():
+            # --- phase 4: RTSTRUCT, rasterised after the image series (dicom_rtstruct.py) ---
+            if dicom_rtstruct.is_rtstruct(datasets[0]):
+                structure_sets.extend(datasets)
+                continue
             # --- phases 2 and 3: SEG and enhanced multi-frame objects (dicom_seg.py, dicom_enhanced.py) ---
             from medvol.plugins import dicom_enhanced, dicom_seg
 
@@ -286,56 +376,83 @@ class DicomPlugin(FormatPlugin):
             for stack in _stacks(datasets, policy, report):
                 for slices, step in _sorted_stack(stack, policy, report):
                     images.append(self._image(slices, step, policy, report))
-        return images, report
+        return images, structure_sets
 
-    def _image(self, slices: List, step: np.ndarray, policy: Policy, report: Report) -> Image:
+    def _image(self, slices: List, step, policy: Policy, report: Report) -> Image:
+        """The image of sorted slices; ``step`` is the slice step vector or a ``dicom_resample.Resampling``."""
+        from medvol.plugins import dicom_resample
+
         first = slices[0]
         iop = np.array(first.ImageOrientationPatient, dtype=np.float64)
         row_spacing, column_spacing = (float(v) for v in first.PixelSpacing)
-        # columns: slice k, row j, column i (array order); IOP[:3] = direction of increasing column index
-        linear = np.column_stack([step, iop[3:] * row_spacing, iop[:3] * column_spacing])
-        matrix = homogeneous(linear, np.array(first.ImagePositionPatient, dtype=np.float64))
+        resampling = step if isinstance(step, dicom_resample.Resampling) else None
+        source_step = step if resampling is None else resampling.source_step
         reference = None
         if getattr(first, "FrameOfReferenceUID", None):
             reference = {"scheme": "dicom_frame_of_reference", "id": str(first.FrameOfReferenceUID)}
-        space = patient_space(matrix, ["z", "y", "x"], policy.world_frame, reference=reference)
+
+        def space_of(slice_step, origin):
+            # columns: slice k, row j, column i (array order); IOP[:3] = direction of increasing column index
+            linear = np.column_stack([slice_step, iop[3:] * row_spacing, iop[:3] * column_spacing])
+            return patient_space(homogeneous(linear, origin), ["z", "y", "x"], policy.world_frame, reference=reference)
 
         array = np.stack([ds.pixel_array for ds in slices])
-        values = self._values(slices, report)
+        values, pairs = self._values(slices, policy, report)
+        if pairs is not None:
+            from medvol.plugins.dicom_rescale import to_physical
+
+            array, kind = to_physical(array, pairs)
+            report.choose("dicom_rescale", f"apply: physical values slope * stored + intercept per slice, {kind}")
+            report.warn(f"rescale slope/intercept differ between slices {sorted(set(pairs))}: stored the physical "
+                        f"values as {array.dtype.name} (policy dicom_rescale='apply'); values.scale/offset not set")
+        axes = ["z", "y", "x"]
         headers = [_file_dict(ds) for ds in slices]
         shared, per_file = split_shared(headers)
         header = {"shared": shared, "per_file": per_file, "file_names": [str(ds.filename_relative) for ds in slices]}
-        axes = ["z", "y", "x"]
-        meta = Meta(axes=axes, spaces=[space], values=values, shape=array.shape)
+        if resampling is None:
+            space = space_of(source_step, np.array(first.ImagePositionPatient, dtype=np.float64))
+            fp = fingerprint.compute(array, Meta(axes=axes, spaces=[space], values=values, shape=array.shape))
+        else:
+            array, fp, values = _resample_volume(array, resampling, iop, (row_spacing, column_spacing), values,
+                                                 space_of, axes, report)
+            space = space_of(resampling.step, resampling.origin)
         source = {
             "format": "dicom",
             "files": header["file_names"],
             "reader": {"name": "medvol"},
             "index_map": {"axis_order": [2, 1, 0], "flipped": [False, False, False], "offset": [0, 0, 0]},
-            "fingerprint": fingerprint.compute(array, meta),
+            "fingerprint": fp,
             "header": header,
         }
         return Image(array, Meta(axes=axes, spaces=[space], values=values, source=[source], shape=array.shape))
 
     @staticmethod
-    def _values(slices: List, report: Report) -> Dict[str, Any]:
+    def _values(slices: List, policy: Policy, report: Report) -> Tuple[Dict[str, Any], Any]:
+        """(values, per-slice rescale pairs to apply or None)."""
         def rescale(ds):
             return (float(getattr(ds, "RescaleSlope", 1) or 1), float(getattr(ds, "RescaleIntercept", 0) or 0))
 
-        pairs = {rescale(ds) for ds in slices}
-        if len(pairs) > 1:
-            raise GeometryError("rescale slope/intercept differ between slices; one MLArray holds one scale "
-                                "(per-slice rescaling is not supported yet)")
+        pairs = [rescale(ds) for ds in slices]
+        apply = None
         first = slices[0]
         values: Dict[str, Any] = {"kind": "measurement"}
-        if "RescaleSlope" in first or "RescaleIntercept" in first:
-            values["scale"], values["offset"] = pairs.pop()
+        if len(set(pairs)) > 1:
+            if policy.dicom_rescale == "error":
+                raise GeometryError("rescale slope/intercept differ between slices; one MLArray holds one scale "
+                                    "(policy dicom_rescale='error'; dicom_rescale='apply' stores the physical values)")
+            apply = pairs
+        elif "RescaleSlope" in first or "RescaleIntercept" in first:
+            values["scale"], values["offset"] = pairs[0]
         rescale_type = str(getattr(first, "RescaleType", "") or "")
         if rescale_type.upper() == "HU" or (not rescale_type and str(getattr(first, "Modality", "")) == "CT"):
             values["unit"] = "hounsfield_unit"
         if "PixelPaddingValue" in first:
-            values["fill"] = int(first.PixelPaddingValue)
-        return values
+            if apply is None:
+                values["fill"] = int(first.PixelPaddingValue)
+            else:
+                report.warn(f"PixelPaddingValue {int(first.PixelPaddingValue)} is a stored value; with per-slice "
+                            "rescaling applied it maps to a different physical value per slice, so values.fill is not set")
+        return values, apply
 
     def write(self, image: Image, path: PathLike, policy: Policy, reference=None, **options) -> Report:
         """Write ``image`` as DICOM (spec 7.6).

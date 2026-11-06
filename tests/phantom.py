@@ -91,6 +91,31 @@ def world_error(image, truth: Truth) -> float:
     return float(np.max(np.linalg.norm(world_read - world_true, axis=1)))
 
 
+
+def expected_linear(image, truth: Truth) -> np.ndarray:
+    """The phantom's value at every voxel centre of a (resampled) ``image``; NaN outside the truth's grid.
+
+    The phantom's value is its Fortran linear index, a linear function of the continuous index
+    and hence of world position, so linear interpolation reproduces it exactly. ``image`` has
+    axes ``[z, y, x]`` or ``[t, z, y, x]``; a leading axis is the truth's 4th index.
+    """
+    from medvol.geometry import lps_matrix
+
+    matrix = lps_matrix(image.space())
+    spatial = image.array.shape[-3:]
+    index = np.indices(spatial).reshape(3, -1)
+    world = (matrix @ np.vstack([index, np.ones(index.shape[1])]))[:3]
+    ijk = (np.linalg.inv(truth.affine_lps) @ np.vstack([world, np.ones(world.shape[1])]))[:3]
+    ni, nj, nk = truth.shape[:3]
+    value = ijk[0] + ni * ijk[1] + ni * nj * ijk[2]
+    upper = np.array([[ni - 1], [nj - 1], [nk - 1]])
+    inside = np.all((ijk > -1e-6) & (ijk < upper + 1e-6), axis=0)
+    value[~inside] = np.nan
+    value = value.reshape(spatial)
+    if image.array.ndim == 4:
+        value = np.stack([value + t * ni * nj * nk for t in range(image.array.shape[0])])
+    return value
+
 # ---------------------------------------------------------------------------------------------
 # NIfTI
 # ---------------------------------------------------------------------------------------------

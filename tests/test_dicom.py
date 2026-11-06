@@ -49,8 +49,8 @@ class TestSingleFrameSeries(DicomCase):
         directory = self.series(truth=_truth(sheared=True))
         with self.assertRaises(GeometryError):
             medvol.read(directory, dicom_tilt="error")
-        with self.assertRaises(NotImplementedError):
-            medvol.read(directory, dicom_tilt="resample")
+        image, report = medvol.read(directory, dicom_tilt="resample")     # TestResample checks the values
+        self.assertTrue(report.choices["dicom_tilt"].startswith("resample"))
 
     def test_ras_frame_and_frame_of_reference(self):
         truth = _truth()
@@ -128,7 +128,7 @@ class TestAssemblyPolicies(DicomCase):
         ds = pydicom.dcmread(files[1])
         ds.RescaleSlope = 3
         ds.save_as(files[1], enforce_file_format=True)
-        with self.assertRaisesRegex(GeometryError, "rescale"):
+        with self.assertRaisesRegex(GeometryError, "rescale.*dicom_rescale='error'"):
             medvol.read(directory)
 
     def test_single_slice_uses_the_slice_thickness(self):
@@ -210,6 +210,172 @@ class TestWrite(DicomCase):
         nifti, _ = medvol.read(phantom.write_nifti(self.dir / "a.nii.gz"))
         with self.assertRaises(NotImplementedError):
             medvol.write(nifti, self.dir / "out", format="dicom")
+
+
+def _set_rescale(directory, rescale):
+    """Give every file of a series its own (slope, intercept): ``rescale(slice k) -> pair``."""
+    for path in sorted(Path(directory).iterdir()):
+        ds = pydicom.dcmread(path)
+        k = int(round(float(np.dot(np.array(ds.ImagePositionPatient, dtype=float) - phantom.ORIGIN_LPS,
+                                   phantom.DIRECTION_LPS[:, 2])) / phantom.SPACING[2]))
+        ds.RescaleSlope, ds.RescaleIntercept = rescale(k)
+        ds.save_as(path, enforce_file_format=True)
+
+
+def _stored_by_slice(directory):
+    """Stored pixels and (slope, intercept) of every file, keyed by SOP Instance UID."""
+    return {ds.SOPInstanceUID: ds for ds in _load(directory).values()}
+
+
+class TestRescaleApply(DicomCase):
+    def check_physical(self, image, directory):
+        """The array is slope * stored + intercept with each slice's own file."""
+        header = image.meta.source[0].header
+        datasets = _stored_by_slice(directory)
+        for z, fields in enumerate(header["per_file"]):
+            merged = {**header["shared"], **fields}
+            ds = datasets[merged["SOPInstanceUID"]]
+            physical = ds.pixel_array.astype(np.float64) * float(ds.RescaleSlope) + float(ds.RescaleIntercept)
+            np.testing.assert_array_equal(image.array[z].astype(np.float64), physical)
+
+    def test_apply_stores_physical_values_and_writes_back_exactly(self):
+        for name, rescale, dtype in (("exact32", lambda k: (1 + k % 3, -1024 + 10 * k), np.float32),
+                                     ("needs64", lambda k: ((0.1, 0.3, 0.7)[k % 3], -3.7), np.float64)):
+            with self.subTest(case=name):
+                directory = self.series(name)
+                _set_rescale(directory, rescale)
+                with self.assertRaisesRegex(GeometryError, "dicom_rescale"):
+                    medvol.read(directory)
+                image, report = medvol.read(directory, dicom_rescale="apply")
+                self.assertEqual(image.array.dtype, dtype)
+                values = image.meta.values
+                self.assertEqual((values.scale, values.offset, values.unit), (None, None, "hounsfield_unit"))
+                self.assertTrue(report.choices["dicom_rescale"].startswith("apply"))
+                self.check_physical(image, directory)
+                medvol.write(image, self.dir / f"{name}.mla")
+                again, _ = medvol.read(self.dir / f"{name}.mla")
+                out = self.dir / f"out_{name}"
+                report = medvol.write(again, out, format="dicom")
+                self.assertEqual(report.warnings, [])
+                original, written = _load(directory), _load(out)
+                for file in original:
+                    self.assertEqual(_differences(original[file], written[file]), [], file)
+                    np.testing.assert_array_equal(original[file].pixel_array, written[file].pixel_array)
+
+    def test_changed_physical_values_are_written_if_exact_else_refused(self):
+        from medvol.plugins.dicom_rescale import RescaleError
+
+        directory = self.series()
+        _set_rescale(directory, lambda k: (1 + k % 3, -1024.0))
+        image, _ = medvol.read(directory, dicom_rescale="apply")
+        header = image.meta.source[0].header
+        slope = float({**header["shared"], **header["per_file"][0]}["RescaleSlope"])
+        image.array[0, 0, 0] += slope                      # one stored step: still exact
+        report = medvol.write(image, self.dir / "ok", format="dicom")
+        self.assertTrue(any("new SOP Instance UIDs" in w for w in report.warnings))
+        again, _ = medvol.read(self.dir / "ok", dicom_rescale="apply")
+        np.testing.assert_array_equal(again.array, image.array)
+        image.array[0, 0, 0] += 0.25 if slope > 1 else 0.5   # between two stored steps
+        with self.assertRaisesRegex(RescaleError, "refused"):
+            medvol.write(image, self.dir / "bad", format="dicom")
+
+
+class TestResample(DicomCase):
+    def check(self, image, truth, exact_coverage=True):
+        """Values equal the analytic phantom; NaN exactly outside the source (``exact_coverage``).
+
+        With a gap in a tilted stack, a voxel needs both bracketing slices, so the covered region
+        is smaller than the analytic box; then only the covered voxels are compared.
+        """
+        from medvol.geometry import has_shear, lps_matrix
+
+        linear = lps_matrix(image.space())[:3, :3]
+        self.assertFalse(has_shear(linear))
+        expected = phantom.expected_linear(image, truth)
+        if exact_coverage:
+            np.testing.assert_array_equal(np.isnan(image.array), np.isnan(expected))
+        covered = ~np.isnan(image.array)
+        self.assertFalse(np.any(np.isnan(expected[covered])))
+        self.assertGreater(np.count_nonzero(covered), image.array.size // 3)
+        np.testing.assert_allclose(image.array[covered], expected[covered], rtol=0, atol=1e-4)
+
+    def test_tilted_series_resampled_onto_a_grid_without_shear(self):
+        truth = _truth(sheared=True)
+        directory = self.series(truth=truth)
+        image, report = medvol.read(directory, dicom_tilt="resample")
+        self.assertEqual(image.array.shape, (7, 6, 5))
+        self.assertEqual(image.array.dtype, np.float32)
+        self.check(image, truth)
+        self.assertTrue(np.isnan(image.meta.values.fill))
+        self.assertTrue(np.any(np.isnan(image.array)) and np.any(np.isfinite(image.array)))
+        space = image.space()
+        normal = np.cross(*np.reshape(image.meta.source[0].header["shared"]["ImageOrientationPatient"], (2, 3)))
+        step = lps_column(space, "z")
+        self.assertAlmostEqual(abs(float(step @ normal)), np.linalg.norm(step), places=9)      # along the normal
+        self.assertAlmostEqual(np.linalg.norm(step), 2.0, places=9)
+        text = " ".join(report.warnings)
+        self.assertIn("trilinear", text)
+        self.assertIn("relabelling the source slices onto this grid without resampling would misplace voxels by up to 3.6 mm", text)
+        fp = image.meta.source[0].fingerprint
+        from mlarray import fingerprint
+
+        self.assertNotEqual(fp["geometry"], fingerprint.geometry_hash(image.meta))
+        self.assertNotEqual(fp["data"], fingerprint.data_hash(image.array))
+        medvol.write(image, self.dir / "x.mla")                                  # NaN fill survives .mla
+        again, _ = medvol.read(self.dir / "x.mla")
+        np.testing.assert_array_equal(again.array, image.array)
+
+    def test_irregular_series_resampled_at_the_mean_spacing(self):
+        truth = _truth()
+        directory = self.series(truth=truth, order=[0, 1, 2, 4, 5, 6])          # slice 3 missing
+        image, report = medvol.read(directory, dicom_irregular_spacing="resample")
+        self.assertEqual(image.array.shape, (6, 6, 5))
+        self.assertAlmostEqual(np.linalg.norm(lps_column(image.space(), "z")), 12.0 / 5, places=9)
+        self.check(image, truth)
+        self.assertFalse(np.any(np.isnan(image.array)))
+        self.assertIsNone(image.meta.values.fill)
+        self.assertTrue(report.choices["dicom_irregular_spacing"].startswith("resample"))
+
+    def test_irregular_and_tilted_needs_both_resample_policies(self):
+        truth = _truth(sheared=True)
+        directory = self.series(truth=truth, order=[0, 1, 2, 4, 5, 6])
+        with self.assertRaisesRegex(GeometryError, "dicom_tilt='resample'"):
+            medvol.read(directory, dicom_irregular_spacing="resample")
+        image, report = medvol.read(directory, dicom_irregular_spacing="resample", dicom_tilt="resample")
+        self.check(image, truth, exact_coverage=False)
+        self.assertIn("dicom_tilt", report.choices)
+
+    def test_writing_a_resampled_image_as_dicom_is_refused(self):
+        from medvol.plugins.dicom_rescale import RescaleError
+
+        directory = self.series(truth=_truth(sheared=True))
+        image, _ = medvol.read(directory, dicom_tilt="resample")
+        with self.assertRaisesRegex(RescaleError, "cannot write"):        # interpolated values are not stored integers
+            medvol.write(image, self.dir / "out", format="dicom")
+        from medvol.image import Image
+
+        cropped = Image(np.ascontiguousarray(image.array[:5]), image.meta.copy())
+        with self.assertRaisesRegex(GeometryError, "slice count changed"):
+            medvol.write(cropped, self.dir / "out2", format="dicom")
+
+    def test_integer_valued_resampling_is_written_with_regenerated_geometry(self):
+        truth = _truth()
+        directory = self.series(truth=truth, order=[0, 1, 2, 3, 4, 6])           # 0..4 at 2 mm, then 4 mm: mean 2.4 mm
+        image, _ = medvol.read(directory, dicom_irregular_spacing="resample")
+        image.array[...] = np.round(image.array)                                 # make them stored integers again
+        out = self.dir / "out"
+        report = medvol.write(image, out, format="dicom")
+        self.assertEqual(report.choices["geometry"], "regenerated from the core")
+        self.assertTrue(any("new SOP Instance UIDs" in w for w in report.warnings))
+        again, _ = medvol.read(out)
+        np.testing.assert_allclose(again.space().matrix(), image.space().matrix(), atol=1e-6)
+        np.testing.assert_array_equal(again.array, image.array.astype(np.int16))
+
+
+def lps_column(space, axis):
+    from medvol.geometry import lps_matrix
+
+    return lps_matrix(space)[:3, list(space.from_array.array_axes).index(axis)]
 
 
 if __name__ == "__main__":
