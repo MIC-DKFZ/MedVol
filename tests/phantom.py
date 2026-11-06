@@ -96,25 +96,49 @@ def world_error(image, truth: Truth) -> float:
 # ---------------------------------------------------------------------------------------------
 
 def write_nifti(path, truth: Truth = None, qform: Optional[np.ndarray] = "truth", sform: Optional[np.ndarray] = "truth",
-                qcode: int = 1, scode: int = 1, version: int = 1, extra=None):
-    """NIfTI with explicit qform/sform (RAS affines; None = not set) and codes."""
+                qcode: int = 1, scode: int = 1, version: int = 1, extra=None, extensions=()):
+    """NIfTI with explicit qform/sform (RAS affines; None = not set), codes and header fields.
+
+    Written with nibabel's header object and array writer directly, because ``nib.save`` rewrites
+    the scaling and (with an affine) the forms.
+    """
     import nibabel as nib
+    from nibabel.openers import ImageOpener
+    from nibabel.volumeutils import array_to_file
 
     truth = truth or Truth()
-    cls = nib.Nifti1Image if version == 1 else nib.Nifti2Image
-    image = cls(truth.volume(), None)
-    header = image.header
+    data = truth.volume()
+    pair = str(path).endswith((".hdr", ".img"))
+    header = {(1, False): nib.nifti1.Nifti1Header, (2, False): nib.nifti2.Nifti2Header,
+              (1, True): nib.nifti1.Nifti1PairHeader, (2, True): nib.nifti2.Nifti2PairHeader}[(version, pair)]()
+    header.set_data_dtype(data.dtype)
+    header.set_data_shape(data.shape)
     header.set_xyzt_units("mm", "sec")
     qform = truth.affine_ras if isinstance(qform, str) else qform
     sform = truth.affine_ras if isinstance(sform, str) else sform
-    header.set_qform(qform, code=qcode if qform is not None else 0)
-    header.set_sform(sform, code=scode if sform is not None else 0)
+    if qform is not None:
+        header.set_qform(qform, code=qcode)
+    if sform is not None:
+        header.set_sform(sform, code=scode)
     if qform is None:
         header["pixdim"][1:4] = np.linalg.norm(truth.affine_ras[:3, :3], axis=0)
     for key, value in (extra or {}).items():
         header[key] = value
-    image.update_header = lambda: None   # keep the codes exactly as set
-    nib.save(image, path)
+    for code, content in extensions:
+        header.extensions.append(nib.nifti1.Nifti1Extension(code, content))
+    if pair:
+        header["vox_offset"] = 0
+        with ImageOpener(str(path)[:-4] + ".hdr", "wb") as handle:
+            header.write_to(handle)
+        with ImageOpener(str(path)[:-4] + ".img", "wb") as handle:
+            array_to_file(data, handle, data.dtype, offset=0, order="F")
+        return path
+    offset = int(np.ceil((header.single_vox_offset + header.extensions.get_sizeondisk()) / 16) * 16)
+    header["vox_offset"] = offset
+    with ImageOpener(str(path), "wb") as handle:
+        header.write_to(handle)
+        handle.write(b"\x00" * (offset - handle.tell()))
+        array_to_file(data, handle, data.dtype, offset=None, order="F")
     return path
 
 

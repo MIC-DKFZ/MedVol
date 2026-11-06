@@ -8,6 +8,7 @@ from medvol.plugins.base import FormatPlugin, PathLike
 
 BUILTIN = {
     "mla": "medvol.plugins.mla:MlaPlugin",
+    "nifti": "medvol.plugins.nifti:NiftiPlugin",
 }
 
 _plugins: Dict[str, FormatPlugin] = {}

@@ -1,7 +1,7 @@
 """Plugin interface, writer capabilities and header field ownership (spec sections 3.2-4)."""
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import FrozenSet, List, Optional, Tuple, Union
 

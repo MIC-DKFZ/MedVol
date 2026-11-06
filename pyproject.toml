@@ -37,6 +37,7 @@ medvol = "medvol.cli:main"
 
 [project.entry-points."medvol.formats"]
 mla = "medvol.plugins.mla:MlaPlugin"
+nifti = "medvol.plugins.nifti:NiftiPlugin"
 
 [project.urls]
 Homepage = "https://github.com/MIC-DKFZ/MedVol"
