@@ -1,56 +1,48 @@
 [build-system]
-requires = ["setuptools>=42.0.0", "wheel"]
+requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
-
-
-[tool.black]
-line-length = 79
-target-version = ['py38', 'py39', 'py310']
-
-
-[tool.ruff]
-line-length = 79
-select = [
-    "E", "F", "W", #flake8
-    "UP", # pyupgrade
-    "I", # isort
-    "BLE", # flake8-blind-exception
-    "B", # flake8-bugbear
-    "A", # flake8-builtins
-    "C4", # flake8-comprehensions
-    "ISC", # flake8-implicit-str-concat
-    "G", # flake8-logging-format
-    "PIE", # flake8-pie
-    "SIM", # flake8-simplify
+[project]
+name = "medvol"
+dynamic = ["version"]
+description = "Faithful N:N conversion of medical image formats through the MLArray v1 model."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Karol Gotkowski", email = "karol.gotkowski@dkfz.de" }]
+requires-python = ">=3.10"
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Medical Science Apps.",
 ]
-ignore = [
-    "E501", # line too long. let black handle this
-    "UP006", "UP007", # type annotation. As using magicgui require runtime type annotation then we disable this.
-    "SIM117", # flake8-simplify - some of merged with statements are not looking great with black, reanble after drop python 3.9
+dependencies = [
+  "numpy>=2",
+  "mlarray>=1.0.0.dev0",
+  "nibabel>=5.2",
+  "pynrrd>=1.0",
 ]
 
-exclude = [
-    ".bzr",
-    ".direnv",
-    ".eggs",
-    ".git",
-    ".mypy_cache",
-    ".pants.d",
-    ".ruff_cache",
-    ".svn",
-    ".tox",
-    ".venv",
-    "__pypackages__",
-    "_build",
-    "buck-out",
-    "build",
-    "dist",
-    "node_modules",
-    "venv",
-    "*vendored*",
-    "*_vendor*",
-]
+[project.optional-dependencies]
+dicom = ["pydicom>=3.0", "highdicom>=0.28"]
+dev = ["pytest>=7", "pydicom>=3.0", "highdicom>=0.28"]
 
-target-version = "py38"
-fix = true
+[project.scripts]
+medvol = "medvol.cli:main"
+
+[project.entry-points."medvol.formats"]
+mla = "medvol.plugins.mla:MlaPlugin"
+
+[project.urls]
+Homepage = "https://github.com/MIC-DKFZ/MedVol"
+
+[tool.setuptools.dynamic]
+version = { attr = "medvol.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["medvol*"]

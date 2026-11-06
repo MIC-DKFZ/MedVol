@@ -1,50 +1,61 @@
-from __future__ import annotations
+"""Format plugin registry: built-in plugins plus the ``medvol.formats`` entry point group."""
 
-from pathlib import Path
+from importlib import import_module
+from importlib.metadata import entry_points
+from typing import Dict, List
 
-from medvol.backends.nibabel_backend import NibabelBackend
-from medvol.backends.pynrrd_backend import PynrrdBackend
-from medvol.backends.simpleitk_backend import SimpleITKBackend
-from medvol.geometry import normalize_backend_name
+from medvol.plugins.base import FormatPlugin, PathLike
 
-
-SUPPORTED_EXTENSIONS = {".nii", ".nii.gz", ".nrrd", ".nhdr"}
-DEFAULT_BACKENDS = {
-    "nifti": "nibabel",
-    "nrrd": "pynrrd",
-}
-VALID_BACKENDS = {
-    "nifti": {"nibabel", "simpleitk"},
-    "nrrd": {"pynrrd", "simpleitk"},
-}
-BACKENDS = {
-    "simpleitk": SimpleITKBackend(),
-    "nibabel": NibabelBackend(),
-    "pynrrd": PynrrdBackend(),
+BUILTIN = {
+    "mla": "medvol.plugins.mla:MlaPlugin",
 }
 
-
-def detect_format(filepath: str | Path) -> str:
-    path = Path(filepath)
-    suffixes = path.suffixes
-    if suffixes[-2:] == [".nii", ".gz"] or path.suffix == ".nii":
-        return "nifti"
-    if path.suffix in {".nrrd", ".nhdr"}:
-        return "nrrd"
-    raise ValueError(f"Unsupported file extension for '{path}'.")
+_plugins: Dict[str, FormatPlugin] = {}
 
 
-def resolve_backend(filepath: str | Path, backend: str | None) -> str:
-    image_format = detect_format(filepath)
-    normalized = normalize_backend_name(backend)
-    if normalized is None:
-        return DEFAULT_BACKENDS[image_format]
-    if normalized not in VALID_BACKENDS[image_format]:
-        raise ValueError(
-            f"Backend '{normalized}' is not valid for {image_format} files."
-        )
-    return normalized
+def _load(spec: str) -> FormatPlugin:
+    module, _, name = spec.partition(":")
+    return getattr(import_module(module), name)()
 
 
-def get_backend(name: str):
-    return BACKENDS[normalize_backend_name(name)]
+def plugins() -> Dict[str, FormatPlugin]:
+    """All registered plugins by name (loaded once)."""
+    if not _plugins:
+        for name, spec in BUILTIN.items():
+            _plugins[name] = _load(spec)
+        for entry in entry_points(group="medvol.formats"):
+            if entry.name not in _plugins:
+                _plugins[entry.name] = entry.load()()
+    return _plugins
+
+
+def register(plugin: FormatPlugin) -> None:
+    """Register a plugin at runtime (replaces a plugin of the same name)."""
+    plugins()[plugin.name] = plugin
+
+
+def get(name: str) -> FormatPlugin:
+    try:
+        return plugins()[name]
+    except KeyError:
+        raise ValueError(f"Unknown format {name!r}; known: {sorted(plugins())}.") from None
+
+
+def for_reading(path: PathLike, format: str = None) -> FormatPlugin:
+    """The plugin that reads ``path``: the given format, else the most confident sniffer."""
+    if format is not None:
+        return get(format)
+    scored = sorted(((plugin.sniff(path), plugin.name) for plugin in plugins().values()), reverse=True)
+    if not scored or scored[0][0] <= 0:
+        raise ValueError(f"No reader recognises {path}; known formats: {sorted(plugins())}.")
+    return get(scored[0][1])
+
+
+def for_writing(path: PathLike, format: str = None) -> FormatPlugin:
+    """The plugin that writes ``path``: the given format, else by extension."""
+    if format is not None:
+        return get(format)
+    matching: List[FormatPlugin] = [p for p in plugins().values() if p.matches_extension(path)]
+    if not matching:
+        raise ValueError(f"No writer for the extension of {path}; known formats: {sorted(plugins())}.")
+    return max(matching, key=lambda p: max(len(e) for e in p.extensions if str(path).lower().endswith(e)))
