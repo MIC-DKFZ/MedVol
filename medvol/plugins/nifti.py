@@ -13,12 +13,14 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 from mlarray import Meta, fingerprint
+from mlarray.metadata import Axis
 
-from medvol.geometry import GeometryError, has_shear, homogeneous, lps_matrix, patient_space, world_corners
+from medvol.geometry import FRAME_WORDS, GeometryError, has_shear, homogeneous, lps_matrix, patient_space, world_corners
 from medvol.image import Image
 from medvol.plugins.base import Capabilities, FieldTable, FormatPlugin, PathLike
 from medvol.policy import Policy
 from medvol.report import Report
+from medvol import vectors
 
 FLIP4 = np.diag([-1.0, -1.0, 1.0, 1.0])
 
@@ -31,7 +33,10 @@ SPACE_UNITS = {1: "meter", 2: "millimeter", 3: "micrometer"}
 TIME_UNITS = {8: "second", 16: "millisecond", 24: "microsecond", 32: "hertz", 40: "ppm", 48: "rad/s"}
 UNIT_SPACE_CODES = {v: k for k, v in SPACE_UNITS.items()}
 UNIT_TIME_CODES = {v: k for k, v in TIME_UNITS.items()}
-VECTOR_INTENTS = {1007, 1008, 1009, 1010, 1011}   # vector, point set, triangle, quaternion, dimless
+#: symmetric matrix, displacement vector, vector, point set, triangle, quaternion, dimensionless
+VECTOR_INTENTS = {1005, 1006, 1007, 1008, 1009, 1010, 1011}
+#: intents whose 3 components are a world vector, in a frame NIfTI does not declare (KB ch03 §8.2)
+FRAME_INTENTS = {1006: "displacement vector", 1007: "vector"}
 
 #: Header fields that encode the geometry; reused verbatim while the geometry is unchanged.
 GEOMETRY_FIELDS = ("dim_info", "pixdim", "slice_start", "slice_end", "slice_code", "slice_duration", "xyzt_units", "toffset",
@@ -171,14 +176,22 @@ class NiftiPlugin(FormatPlugin):
             raise ValueError(f"{path} is an Analyze file, not NIfTI.")
         version = "2" if isinstance(header, nib.Nifti2Header) else "1"
         stored = np.asarray(image.dataobj.get_unscaled())
-        ndim = stored.ndim
         shape = stored.shape
+        axis_order = list(range(stored.ndim))[::-1]
+        axes = self._axes(header, stored.ndim, report)
+        if stored.ndim == 5 and shape[3] == 1 and int(header["intent_code"]) in VECTOR_INTENTS:
+            # the NIfTI layout of a vector image (dim 4 = 1, components in dim 5): the singleton time axis
+            # exists only because of the format, and the writer puts it back
+            stored = stored[:, :, :, 0, :]
+            axes = [axis for axis in axes if axis["name"] != "t"]
+            axis_order = [3, 2, 1, 0]                 # NIfTI axes i, j, k, c (dim 4 left out)
+            report.choose("nifti_vector_layout", "singleton dim 4 of the vector image not kept as an axis")
+        ndim = stored.ndim
         array = np.ascontiguousarray(stored.transpose(tuple(range(ndim))[::-1]))
 
-        affine_ras, code, form = _choose_form(header, shape + (1,) * max(0, 3 - ndim), policy, report)
+        affine_ras, code, form = _choose_form(header, shape + (1,) * max(0, 3 - len(shape)), policy, report)
         n_space = min(ndim, 3)
         space_names = ["x", "y", "z"][:n_space]
-        axes = self._axes(header, ndim, report)
         matrix_lps = FLIP4 @ affine_ras
         matrix_lps = np.hstack([matrix_lps[:, :n_space], matrix_lps[:, 3:4]])
         space_name, reference = CODE_SPACES.get(code, ("patient", None))
@@ -188,13 +201,14 @@ class NiftiPlugin(FormatPlugin):
             space_name = "patient"
         space = patient_space(matrix_lps, space_names, policy.world_frame, name=space_name, reference=reference)
         values = self._values(header)
+        axes = self._vector_frame(header, axes, policy, report, values)
         meta = Meta(axes=axes, spaces=[space], values=values, shape=array.shape)
         source = {
             "format": "nifti",
             "format_version": version,
             "files": [os.path.basename(str(path))],
             "reader": {"name": "medvol"},
-            "index_map": {"axis_order": list(range(ndim))[::-1], "flipped": [False] * ndim, "offset": [0] * ndim},
+            "index_map": {"axis_order": axis_order, "flipped": [False] * ndim, "offset": [0] * ndim},
             "fingerprint": fingerprint.compute(array, meta),
             "header": header_to_dict(header),
         }
@@ -228,6 +242,36 @@ class NiftiPlugin(FormatPlugin):
         return nifti_axes[::-1]
 
     @staticmethod
+    def _vector_frame(header, axes: List[Dict[str, Any]], policy: Policy, report: Report,
+                      values: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Labels of a 3-component vector axis (NIfTI dim 5).
+
+        NIfTI does not say in which frame vector components are: ITK and ANTs write LPS components, NiftyReg
+        RAS ones, under the same intent (KB ch03 §8.2). The frame must therefore be declared.
+        """
+        intent = int(header["intent_code"])
+        index = next((i for i, axis in enumerate(axes) if axis["name"] == "c"), None)   # NIfTI dim 5
+        if index is None or axes[index].get("type") != "component" or intent not in FRAME_INTENTS:
+            return axes
+        size = int(header["dim"][5])
+        if size != 3:
+            report.choose("vector_frame", f"not applied: intent {intent} with {size} components, not 3")
+            return axes
+        what = f"intent {intent} ({FRAME_INTENTS[intent]})"
+        rule = policy.vector_frame
+        if rule == "error":
+            raise vectors.VectorFrameError(f"NIfTI {what}: the frame of the vector components is not declared by "
+                                           "the format (policy vector_frame='error').")
+        if rule == "from_file":
+            raise vectors.undeclared("NIfTI", f"{what} does not declare the frame of its vector components "
+                                     "(ITK/ANTs write LPS components, NiftyReg RAS ones)")
+        words = vectors.POLICY_WORDS[rule]
+        report.choose("vector_frame", f"{rule}: components {vectors.describe(words)} as declared by the policy; "
+                                      "NIfTI does not store the frame")
+        values["kind"] = "vector"
+        return vectors.with_labels(axes, index, words)
+
+    @staticmethod
     def _values(header) -> Dict[str, Any]:
         values: Dict[str, Any] = {"kind": "measurement"}
         slope, inter = float(header["scl_slope"]), float(header["scl_inter"])
@@ -247,8 +291,13 @@ class NiftiPlugin(FormatPlugin):
         # layout is the output encoding only: NIfTI-1 or -2 as in the source, or NIfTI-1 with layout='default'
         version = ((source.format_version if source is not None else None) or "1") if policy.layout == "source" else "1"
 
+        image = Image(self._vector_components(image, policy, report), meta)
         order, nifti_axes = self._layout(meta, report)
         data = np.transpose(image.array, order)            # NIfTI order [i, j, k, t, c, ...] (C memory)
+        if any(axis is None for axis in nifti_axes):        # vector image without time: dim 4 = 1, components in dim 5
+            slot = nifti_axes.index(None)
+            data = np.expand_dims(data, slot)
+            nifti_axes[slot] = Axis(name="_", type="other")
         pair = path.lower().endswith((".hdr", ".img", ".hdr.gz", ".img.gz"))
         header_class = {("1", False): nib.nifti1.Nifti1Header, ("2", False): nib.nifti2.Nifti2Header,
                         ("1", True): nib.nifti1.Nifti1PairHeader, ("2", True): nib.nifti2.Nifti2PairHeader}[(version, pair)]
@@ -278,6 +327,12 @@ class NiftiPlugin(FormatPlugin):
         rest = [i for i in range(len(axes)) if i not in space_idx and i not in time_idx]
         if len(time_idx) > 1:
             raise GeometryError("NIfTI holds one time axis.")
+        components = [i for i in rest if axes[i].type == "component"]
+        if components and not time_idx and len(space_idx) == 3:
+            # NIfTI's vector layout: dim 4 (time) = 1, the components in dim 5
+            rest = components[:1] + [i for i in rest if i != components[0]][::-1]
+            order = space_idx + rest
+            return order, [axes[i] for i in space_idx] + [None] + [axes[i] for i in rest]
         if rest and not time_idx:
             # NIfTI dim 4 is time; a component axis without time gets a singleton time axis? Not representable
             # without changing the shape, so the first non-space axis takes dim 4.
@@ -285,6 +340,31 @@ class NiftiPlugin(FormatPlugin):
             report.warn(f"axis {axes[time_idx[0]].name!r} ({axes[time_idx[0]].type}) is written as NIfTI dim 4")
         order = space_idx + time_idx + rest[::-1]
         return order, [axes[i] for i in order]
+
+    @staticmethod
+    def _vector_components(image: Image, policy: Policy, report: Report) -> np.ndarray:
+        """The array to write: components as stored when their frame is LPS or RAS (the two conventions a NIfTI
+        reader can assume, reported, since NIfTI cannot store the frame); other frames are re-expressed in the
+        ``world_frame`` (a signed permutation, reported)."""
+        index, words, unknown = vectors.frame_axis(image.meta)
+        vectors.report_unknown(unknown, report)
+        if index is None:
+            return image.array
+        name = vectors.NAMED_FRAMES.get(words)
+        if name is not None:
+            others = "ITK and ANTs assume LPS" if name == "RAS" else "NiftyReg and nibabel-based tools assume RAS"
+            report.choose("vector_frame", f"components written as stored, in {vectors.describe(words)}")
+            report.warn(f"NIfTI cannot store the frame of vector components: readers must assume {name} "
+                        f"(MedVol: vector_frame='{name.lower()}'; {others})")
+            return image.array
+        target = FRAME_WORDS[policy.world_frame]
+        array = vectors.permute(image.array, index, words, target)
+        name = vectors.NAMED_FRAMES[tuple(target)]
+        report.choose("vector_frame", f"components converted from {vectors.describe(words)} to "
+                                      f"{vectors.describe(target)} (world_frame)")
+        report.warn(f"vector component values changed: re-expressed from {vectors.letters(words)} to {name}, "
+                    f"which NIfTI readers can assume; readers must assume {name} (MedVol: vector_frame='{name.lower()}')")
+        return array
 
     @staticmethod
     def _apply_source(header, source, report: Report) -> None:

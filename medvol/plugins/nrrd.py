@@ -31,11 +31,12 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 from mlarray import Meta, fingerprint
 
-from medvol.geometry import GeometryError, homogeneous, lps_matrix, patient_space
+from medvol.geometry import FRAME_WORDS, GeometryError, homogeneous, lps_matrix, patient_space
 from medvol.image import Image
 from medvol.plugins.base import Capabilities, FieldTable, FormatPlugin, PathLike
 from medvol.policy import Policy
 from medvol.report import Report
+from medvol import vectors
 
 
 def _nrrd():
@@ -92,6 +93,10 @@ KIND_SIZES = {"stub": 1, "scalar": 1, "complex": 2, "2-vector": 2, "3-vector": 3
               "3-color": 3, "4-color": 4, "2d-symmetric-matrix": 3, "2d-masked-symmetric-matrix": 4, "2d-matrix": 4,
               "2d-masked-matrix": 5, "3d-symmetric-matrix": 6, "3d-masked-symmetric-matrix": 7, "3d-matrix": 9,
               "3d-masked-matrix": 10}
+#: kinds of 3-component world vectors, and whether they are covariant (gradients, normals: they transform
+#: with the inverse transpose of the measurement frame, which equals the frame itself for rotations)
+FRAME_KINDS = {"vector": False, "3-vector": False, "covariant-vector": True, "normal": True, "3-gradient": True,
+               "3-normal": True}
 DEFAULT_KINDS = {"space": "domain", "time": "time", "component": "vector", "channel": "list", "other": "list"}
 AXIS_NAME_BASES = {"time": "t", "component": "c", "channel": "c", "other": "u"}
 
@@ -485,9 +490,7 @@ class NrrdPlugin(FormatPlugin):
         sample_units = _unit_name(_get(fields, "sample units"))
         if sample_units is not None:
             values["unit"] = sample_units
-        if _get(fields, "measurement frame") is not None:
-            report.choose("measurement_frame", "kept in source as written (entry i = column i of the frame); "
-                                               "vector values are not rotated")
+        array, axes = self._vector_frame(fields, file_axes, frame, world, array, axes, values, policy, report)
         spaces = [space] if space is not None else []
         meta = Meta(axes=axes, spaces=spaces, values=values, shape=array.shape)
         ndim = array.ndim
@@ -553,6 +556,76 @@ class NrrdPlugin(FormatPlugin):
         return patient_space(matrix_lps, names, policy.world_frame)
 
     @staticmethod
+    def _vector_frame(fields, file_axes: List[FileAxis], frame: Optional[Frame], world: Optional[int],
+                      array: np.ndarray, axes: List[Dict[str, Any]], values: Dict[str, Any], policy: Policy,
+                      report: Report) -> Tuple[np.ndarray, List[Dict[str, Any]]]:
+        """Frame labels of a 3-component vector axis (spec 7.2), applying the ``measurement frame`` if needed.
+
+        The measurement frame maps measurement coordinates to ``space`` coordinates; file entry ``c`` is its
+        column ``c`` (KB ch04 §2.6). Without one, the components are along the ``space`` axes (NRRD spec).
+        A signed permutation of the patient axes is recorded as labels with the values unchanged; any other
+        frame is applied: the values are rotated into the ``world_frame`` (a reported value conversion).
+        """
+        mf = _get(fields, "measurement frame")
+        candidates = [axis for axis in file_axes
+                      if axis.type == "component" and (axis.kind or "").lower() in FRAME_KINDS and axis.size == 3]
+        if len(candidates) != 1:
+            if len(candidates) > 1:
+                report.warn(f"NRRD axes {[a.index for a in candidates]} are all 3-component vectors; "
+                            "the frame of their components is not interpreted")
+            if mf is not None:
+                report.choose("measurement_frame", "kept in source as written (entry i = column i of the frame); "
+                                                   "no single 3-component vector axis to apply it to")
+            return array, axes
+        axis = candidates[0]
+        index = len(file_axes) - 1 - axis.index          # MLArray order
+        what = f"NRRD axis {axis.index} (kind {axis.kind!r})"
+        rule = policy.vector_frame
+        if rule == "error":
+            raise vectors.VectorFrameError(f"{what}: vector components found (policy vector_frame='error').")
+        if mf is not None:
+            report.choose("measurement_frame", "as written (entry i = column i of the frame)")
+        if rule in vectors.POLICY_WORDS:
+            words = vectors.POLICY_WORDS[rule]
+            note = " (the file's measurement frame is not used)" if mf is not None else ""
+            report.choose("vector_frame", f"{rule}: components {vectors.describe(words)} as declared by the "
+                                          f"policy{note}")
+            values["kind"] = "vector"
+            return array, vectors.with_labels(axes, index, words)
+        if frame is None:
+            report.warn(f"{what}: the NRRD has no patient 'space', so the frame of the vector components is unknown "
+                        f"(declare it with vector_frame={vectors.POLICY_OPTIONS})")
+            return array, axes
+        if mf is None:
+            matrix, said = np.eye(3), f"no measurement frame: components along the axes of space {frame.name!r}"
+        else:
+            full = np.array([[np.nan] * world if v is None else v for v in mf], dtype=np.float64).T   # columns
+            if full.shape != (world, world) or not np.all(np.isfinite(full)):
+                raise GeometryError(f"NRRD measurement frame {mf} is not a {world}x{world} matrix.")
+            if world == 4:
+                if not (np.all(full[3, :3] == 0) and np.all(full[:3, 3] == 0) and full[3, 3] == 1):
+                    raise GeometryError(f"NRRD measurement frame {mf} couples space and time; MedVol does not apply it.")
+                full = full[:3, :3]
+            matrix, said = full, f"measurement frame in space {frame.name!r}"
+        lps = frame.signs @ matrix                          # columns: component c in LPS
+        words = vectors.words_of(lps)
+        values["kind"] = "vector"
+        if words is not None:
+            report.choose("vector_frame", f"from_file: components {vectors.describe(words)} ({said}); values unchanged")
+            return array, vectors.with_labels(axes, index, words)
+        target = FRAME_WORDS[policy.world_frame]
+        applied = np.linalg.inv(lps).T if FRAME_KINDS[axis.kind.lower()] else lps
+        try:
+            array = vectors.transform(array, index, vectors.basis(target).T @ applied)
+        except vectors.VectorFrameError as error:
+            raise vectors.VectorFrameError(f"{what}: the {said} is not a signed permutation of the patient axes "
+                                           f"and must be applied, but {error}.") from None
+        report.choose("vector_frame", f"from_file: {said} applied; components {vectors.describe(target)} (world_frame)")
+        report.warn(f"vector component values changed: the measurement frame is a general rotation, applied to the "
+                    f"values to express them in {vectors.letters(target)} (stored as {array.dtype.name})")
+        return array, vectors.with_labels(axes, index, target)
+
+    @staticmethod
     def _axes(fields, file_axes: List[FileAxis], report: Report) -> List[Dict[str, Any]]:
         """MLArray axes in NRRD file order (the caller reverses them)."""
         origin = _get(fields, "space origin")
@@ -606,6 +679,7 @@ class NrrdPlugin(FormatPlugin):
                 fields.pop(key, None)
         else:
             fields = self._regenerate(image, nrrd_axes, original, report, policy)
+        self._measurement_frame(fields, meta, original, report)
         self._data_dependent(fields, source, image, report)
 
         encoding, endian, detached = self._layout(image.array.dtype, path, original, policy, report)
@@ -701,6 +775,47 @@ class NrrdPlugin(FormatPlugin):
                 fields[key] = value
         fields.update(new)
         return fields
+
+    @staticmethod
+    def _measurement_frame(fields, meta: Meta, original: Optional[RawHeader], report: Report) -> None:
+        """``measurement frame`` matching the component labels in the written ``space``.
+
+        The source's frame is kept as written when it still says the same (exact round trips); a source
+        without one stays without one while the components are along the space axes.
+        """
+        index, words, unknown = vectors.frame_axis(meta)
+        vectors.report_unknown(unknown, report)
+        if index is None:
+            return
+        space = _get(fields, "space")
+        frame = FRAMES.get(str(space).lower()) if space is not None else None
+        if frame is None:
+            report.warn(f"vector components are {vectors.describe(words)}, but the NRRD has no patient 'space' to "
+                        "refer a measurement frame to: their frame is not written")
+            return
+        matrix = frame.signs @ vectors.basis(words) + 0.0      # columns: component c in the space's coordinates
+        if frame.time:
+            matrix = np.block([[matrix, np.zeros((3, 1))], [np.zeros((1, 3)), np.ones((1, 1))]])
+        entries = [[float(v) for v in column] for column in matrix.T]
+        src_fields = original.fields if original is not None else {}
+        current = _get(fields, "measurement frame")
+        described = f"components {vectors.describe(words)}"
+        if current is not None and all(v is not None for v in current) and np.array_equal(
+                np.array(current, dtype=np.float64), np.array(entries)):
+            report.choose("vector_frame", f"{described}: measurement frame kept as written")
+            return
+        if (current is None and original is not None and _get(src_fields, "measurement frame") is None
+                and np.array_equal(matrix, np.eye(len(matrix)))):
+            report.choose("vector_frame", f"{described}, along the axes of space {space!r} (no measurement frame, "
+                                          "as in the source)")
+            return
+        key = next((k for k in fields if canonical(k) == "measurement frame"),
+                   _spelling(src_fields, "measurement frame"))
+        fields[key] = entries
+        report.choose("vector_frame", f"{described}: measurement frame written for space {space!r}")
+        if current is not None:
+            report.warn("NRRD measurement frame rewritten: the source's frame no longer described the vector "
+                        f"components ({described})")
 
     @staticmethod
     def _kind_fits(kind: str, axis_type: str, size: int, time_in_space: bool) -> bool:
