@@ -41,6 +41,7 @@ nifti = "medvol.plugins.nifti:NiftiPlugin"
 dicom = "medvol.plugins.dicom:DicomPlugin"
 mgh = "medvol.plugins.mgh:MghPlugin"
 metaimage = "medvol.plugins.metaimage:MetaImagePlugin"
+nrrd = "medvol.plugins.nrrd:NrrdPlugin"
 
 [project.urls]
 Homepage = "https://github.com/MIC-DKFZ/MedVol"
