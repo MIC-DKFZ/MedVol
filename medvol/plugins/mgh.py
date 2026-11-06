@@ -233,7 +233,7 @@ class MghPlugin(FormatPlugin):
         report = Report("write", self.name, str(path))
         meta = image.meta
         path = str(path)
-        source = next((entry for entry in meta.source if entry.format == "mgh"), None) if policy.layout == "source" else None
+        source = next((entry for entry in meta.source if entry.format == "mgh"), None)   # encoding comes from the extension
 
         order, mgh_axes = self._layout(meta)
         data = np.transpose(image.array, order)              # MGH order [i, j, k(, frame)]

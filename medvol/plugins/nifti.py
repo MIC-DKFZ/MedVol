@@ -243,8 +243,9 @@ class NiftiPlugin(FormatPlugin):
         report = Report("write", self.name, str(path))
         meta = image.meta
         path = str(path)
-        source = next((entry for entry in meta.source if entry.format == "nifti"), None) if policy.layout == "source" else None
-        version = (source.format_version if source is not None else None) or "1"
+        source = next((entry for entry in meta.source if entry.format == "nifti"), None)
+        # layout is the output encoding only: NIfTI-1 or -2 as in the source, or NIfTI-1 with layout='default'
+        version = ((source.format_version if source is not None else None) or "1") if policy.layout == "source" else "1"
 
         order, nifti_axes = self._layout(meta, report)
         data = np.transpose(image.array, order)            # NIfTI order [i, j, k, t, c, ...] (C memory)

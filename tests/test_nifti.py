@@ -187,6 +187,14 @@ class TestRoundTrip(NiftiCase):
         self.assertEqual(float(nib.load(str(self.dir / "b.nii.gz")).header["cal_max"]), 0.0)
         self.assertTrue(any("cal_max dropped" in w for w in report.warnings))
 
+    def test_default_layout_changes_only_the_encoding(self):
+        path = phantom.write_nifti(self.dir / "v2.nii.gz", version=2, extra={"descrip": "kept"})
+        image, _ = medvol.read(path)
+        medvol.write(image, self.dir / "v1.nii.gz", layout="default")
+        header = nib.load(str(self.dir / "v1.nii.gz")).header
+        self.assertIsInstance(header, nib.Nifti1Header)
+        self.assertEqual(header["descrip"].item(), b"kept")
+
 
 class TestFromOtherSources(NiftiCase):
     def test_mlarray_without_source_writes_correct_geometry(self):
