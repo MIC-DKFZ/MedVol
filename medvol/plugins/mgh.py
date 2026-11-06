@@ -182,7 +182,7 @@ class MghPlugin(FormatPlugin):
 
     # -- read --------------------------------------------------------------------------------
 
-    def read(self, path: PathLike, policy: Policy) -> Tuple[List[Image], Report]:
+    def read(self, path: PathLike, policy: Policy, **options) -> Tuple[List[Image], Report]:
         report = Report("read", self.name, str(path))
         with _opener(str(path), "rb") as handle:
             raw = handle.read()

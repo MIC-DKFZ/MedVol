@@ -29,7 +29,7 @@ class MlaPlugin(FormatPlugin):
             return 0.0
         return 1.0 if b"b2frame" in head else 0.5
 
-    def read(self, path: PathLike, policy: Policy) -> Tuple[List[Image], Report]:
+    def read(self, path: PathLike, policy: Policy, **options) -> Tuple[List[Image], Report]:
         return [Image.from_mlarray(MLArray(path))], Report("read", self.name, str(path))
 
     def write(self, image: Image, path: PathLike, policy: Policy, **options) -> Report:

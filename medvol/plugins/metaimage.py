@@ -289,7 +289,7 @@ class MetaImagePlugin(FormatPlugin):
 
     # -- read --------------------------------------------------------------------------------
 
-    def read(self, path: PathLike, policy: Policy) -> Tuple[List[Image], Report]:
+    def read(self, path: PathLike, policy: Policy, **options) -> Tuple[List[Image], Report]:
         report = Report("read", self.name, str(path))
         path = str(path)
         with open(path, "rb") as handle:

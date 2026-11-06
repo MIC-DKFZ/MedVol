@@ -62,8 +62,11 @@ class FormatPlugin(ABC):
         """Confidence 0..1 that ``path`` is in this format, from its content where possible."""
 
     @abstractmethod
-    def read(self, path: PathLike, policy: Policy) -> Tuple[List[Image], Report]:
-        """All images in ``path`` (DICOM can hold several stacks) and the report."""
+    def read(self, path: PathLike, policy: Policy, **options) -> Tuple[List[Image], Report]:
+        """All images in ``path`` (DICOM can hold several stacks) and the report.
+
+        ``options`` are format-specific (e.g. the ``reference`` series of a DICOM RTSTRUCT).
+        """
 
     @abstractmethod
     def write(self, image: Image, path: PathLike, policy: Policy, **options) -> Report:

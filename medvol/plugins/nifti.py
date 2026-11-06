@@ -164,7 +164,7 @@ class NiftiPlugin(FormatPlugin):
 
     # -- read --------------------------------------------------------------------------------
 
-    def read(self, path: PathLike, policy: Policy) -> Tuple[List[Image], Report]:
+    def read(self, path: PathLike, policy: Policy, **options) -> Tuple[List[Image], Report]:
         nib = _nib()
         report = Report("read", self.name, str(path))
         image = nib.load(str(path))

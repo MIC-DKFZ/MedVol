@@ -466,7 +466,7 @@ class NrrdPlugin(FormatPlugin):
 
     # -- read --------------------------------------------------------------------------------
 
-    def read(self, path: PathLike, policy: Policy) -> Tuple[List[Image], Report]:
+    def read(self, path: PathLike, policy: Policy, **options) -> Tuple[List[Image], Report]:
         nrrd = _nrrd()
         path = str(path)
         report = Report("read", self.name, path)

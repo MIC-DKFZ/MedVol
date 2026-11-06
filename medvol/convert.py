@@ -17,11 +17,16 @@ def _tool() -> str:
     return f"medvol {__version__}"
 
 
-def read_all(path: PathLike, format: Optional[str] = None, policy: Optional[Policy] = None, **options) -> Tuple[List[Image], Report]:
-    """Every image in ``path`` (a DICOM directory can hold several stacks) and the report."""
+def read_all(path: PathLike, format: Optional[str] = None, policy: Optional[Policy] = None,
+             reference=None, **options) -> Tuple[List[Image], Report]:
+    """Every image in ``path`` (a DICOM directory can hold several stacks) and the report.
+
+    ``reference``: for a DICOM RTSTRUCT, the referenced image series it is rasterised onto.
+    """
     policy = Policy.from_options(policy, **options)
     plugin = registry.for_reading(path, format)
-    images, report = plugin.read(path, policy)
+    extra = {"reference": reference} if reference is not None else {}
+    images, report = plugin.read(path, policy, **extra)
     if policy.reorient != "none":
         from medvol.reorient import reorient
 
@@ -32,9 +37,10 @@ def read_all(path: PathLike, format: Optional[str] = None, policy: Optional[Poli
     return images, report
 
 
-def read(path: PathLike, format: Optional[str] = None, policy: Optional[Policy] = None, **options) -> Tuple[Image, Report]:
+def read(path: PathLike, format: Optional[str] = None, policy: Optional[Policy] = None,
+         reference=None, **options) -> Tuple[Image, Report]:
     """The image in ``path`` and the report. Raises if ``path`` holds several images (use ``read_all``)."""
-    images, report = read_all(path, format, policy, **options)
+    images, report = read_all(path, format, policy, reference=reference, **options)
     if len(images) != 1:
         raise ValueError(f"{path} holds {len(images)} images; use medvol.read_all() or policy dicom_stacks='largest'.")
     return images[0], report
