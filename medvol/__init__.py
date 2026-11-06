@@ -1,6 +1,6 @@
 """MedVol: faithful N:N conversion of medical image formats through the MLArray v1 model."""
 
-__version__ = "1.0.0.dev0"
+__version__ = "1.0.0"
 
 from medvol.convert import check_capabilities, convert, inspect, read, read_all, write  # noqa: E402
 from medvol.image import Image  # noqa: E402

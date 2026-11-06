@@ -9,7 +9,7 @@ Faithful N:N conversion of medical image formats through one neutral model: the
 [MLArray v1](https://github.com/MIC-DKFZ/mlarray) metadata model. Formats: NIfTI-1/2, NRRD, MetaImage, MGH/MGZ,
 DICOM (single-frame and enhanced multi-frame series, SEG) and `.mla`.
 
-**Status:** MedVol 1.0 is in development (branch `rework/v2`). Design: [`docs/design/spec.md`](docs/design/spec.md).
+Design: [`docs/design/spec.md`](docs/design/spec.md).
 
 ## Guarantees
 

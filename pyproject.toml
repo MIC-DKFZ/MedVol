@@ -23,9 +23,9 @@ classifiers = [
 ]
 dependencies = [
   "numpy>=2",
-  "mlarray>=1.0.0.dev0",
+  "mlarray>=1.0.0",
   "nibabel>=5.2",
-  "pynrrd>=1.0",
+  "pynrrd>=1.0,<2",
 ]
 
 [project.optional-dependencies]
