@@ -12,6 +12,7 @@ OPTIONS = {
     "dicom_tilt": ("exact", "resample", "error"),
     "dicom_irregular_spacing": ("error", "split", "resample"),
     "dicom_stacks": ("split", "largest", "error"),
+    "dicom_rescale": ("error", "apply"),
     "vector_frame": ("from_file", "lps", "ras", "error"),
     "on_loss": ("warn", "error"),
     "layout": ("source", "default"),
@@ -35,6 +36,7 @@ class Policy:
     dicom_tilt: str = "exact"
     dicom_irregular_spacing: str = "error"
     dicom_stacks: str = "split"
+    dicom_rescale: str = "error"
     vector_frame: str = "from_file"
     on_loss: str = "warn"
     layout: str = "source"
